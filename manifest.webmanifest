@@ -1,0 +1,22 @@
+{
+  "id": "./",
+  "name": "Music Making App",
+  "short_name": "Music App",
+  "description": "Step sequencer, piano roll, multitrack timeline and synth. Make beats anywhere — works offline.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "theme_color": "#ff5e35",
+  "background_color": "#edf0f2",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["music", "entertainment", "productivity"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
