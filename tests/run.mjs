@@ -816,6 +816,68 @@ await test('[B] clip launcher: bar-quantised launches, scenes, stop, and perform
   return 'launch waits for the bar, scene + stop work, recorded '+r.clips0.length+' clip run(s) on the kick track';
 });
 
+await test('[B] FLAC export is lossless (decodes bit-exact), 16 and 24-bit',async()=>{
+  const o=await open();
+  const r=await o.page.evaluate(async()=>{
+    const B=__beat,sr=44100,n=sr*3,L=new Float32Array(n),R=new Float32Array(n);
+    for(let i=0;i<n;i++){L[i]=Math.sin(i*.05)*.5+Math.sin(i*.31)*.2+(((i*7919)%1000)/1000-.5)*.1;R[i]=(i%20000<10000?0:Math.sin(i*.11)*.4)+(i===500?.9:0)}
+    L.fill(0,0,300);L[2000]=1;L[2001]=-1;
+    const buf=new AudioBuffer({numberOfChannels:2,length:n,sampleRate:sr});buf.copyToChannel(L,0);buf.copyToChannel(R,1);
+    const out={};
+    for(const bits of [16,24]){
+      const blob=await B.flacEncode(buf,bits),ab=await blob.arrayBuffer(),hdr=new Uint8Array(ab,0,4);out['sig'+bits]=String.fromCharCode(...hdr);out['size'+bits]=blob.size;
+      const ctx=new OfflineAudioContext(2,1000,sr),dec=await ctx.decodeAudioData(ab.slice(0));
+      const scale=bits===16?32767:8388607;let maxErr=0;const dl=dec.getChannelData(0),dr=dec.getChannelData(1);
+      for(let i=0;i<n;i+=3){maxErr=Math.max(maxErr,Math.abs(dl[i]-Math.round(Math.max(-1,Math.min(1,L[i]))*scale)/(bits===16?32768:8388608)),Math.abs(dr[i]-Math.round(Math.max(-1,Math.min(1,R[i]))*scale)/(bits===16?32768:8388608)))}
+      out['err'+bits]=maxErr;out['len'+bits]=dec.length;out['sr'+bits]=dec.sampleRate;
+      {const pcm=new Uint8Array(n*2*(bits/8));let o=0;for(let i=0;i<n;i++)for(const ch of [L,R]){const q=Math.round(Math.max(-1,Math.min(1,ch[i]))*scale);if(bits===16){pcm[o++]=q&255;pcm[o++]=(q>>8)&255}else{pcm[o++]=q&255;pcm[o++]=(q>>8)&255;pcm[o++]=(q>>16)&255}}
+       let s='';for(let i=0;i<ab.byteLength;i+=0x8000)s+=String.fromCharCode.apply(null,new Uint8Array(ab,i,Math.min(0x8000,ab.byteLength-i)));out['flac'+bits]=btoa(s);s='';for(let i=0;i<pcm.length;i+=0x8000)s+=String.fromCharCode.apply(null,pcm.subarray(i,i+0x8000));out['pcm'+bits]=btoa(s)}
+    }
+    return out});
+  eq(r.sig16,'fLaC');assert(r.err16<4e-5,'16-bit not lossless: '+r.err16);assert(r.err24<4e-7,'24-bit not lossless: '+r.err24);
+  /* exact check against ffmpeg's decoder when it is installed */
+  let exact='';try{const cp=await import('child_process');for(const bits of [16,24]){fs.writeFileSync('/tmp/_t'+bits+'.flac',Buffer.from(r['flac'+bits],'base64'));const out=cp.execFileSync('ffmpeg',['-v','error','-i','/tmp/_t'+bits+'.flac','-f',bits===16?'s16le':'s24le','-'],{maxBuffer:1<<29});assert(Buffer.compare(out,Buffer.from(r['pcm'+bits],'base64'))===0,'ffmpeg decode differs ('+bits+'-bit)');}exact=' · ffmpeg decode identical'}catch(e){if(/differs/.test(String(e.message)))throw e}assert(r.len16>=3*44100-1,'length '+r.len16);
+  assert(r.size16<3*44100*2*2*.8,'compresses: '+r.size16);noErr(o);await close(o);return `FLAC 16-bit ${(r.size16/1e3).toFixed(0)} kB, 24-bit ${(r.size24/1e3).toFixed(0)} kB, decoded bit-exact${exact}`;
+});
+
+await test('[B] sharing: project link round-trips via the URL hash (size-limited, hostile links rejected), Web Share, standalone player',async()=>{
+  const o=await open();const pg=o.page;
+  const r=await pg.evaluate(async()=>{
+    const B=__beat,S=B.S,out={};
+    B.setBpm(111);S.name='Link test';S.patterns[2].pn[9]=[{s:1,l:2,m:64,v:.7}];S.auto['m:filter']=Array(64).fill(40);
+    const l=await B.buildProjectLink();out.ok=l.ok;out.size=l.size;out.hash=l.link&&l.link.split('#')[1].slice(0,3);
+    const raw=await B.decodeProjectLink(l.link);out.raw=[raw.bpm,raw.name,raw.patterns[2].pn[9][0].m];
+    B.setBpm(90);S.name='other';await B.loadProjectLink(l.link,{skipConfirm:true});out.after=[B.S.bpm,B.S.name,B.S.patterns[2].pn[9].length,!!B.S.auto['m:filter']];
+    /* big project ⇒ size fallback */
+    for(let p=0;p<8;p++)for(let t=0;t<12;t++)for(let s=0;s<40;s++)B.S.patterns[p].pn[t]=Array.from({length:60},(_,i)=>({s:(i*7+p+t)%16+(i%4)*.25,l:1+(i%3),m:30+((i*13+t)%60),v:.3+((i*11+p)%7)/10}));
+    const big=await B.buildProjectLink();out.big=[big.ok,big.reason];
+    /* hostile */
+    out.bad=[];for(const h of ['#p=@@@','#p=AAAA','#p='+'A'.repeat(20000)]){try{await B.decodeProjectLink('x'+h);out.bad.push('accepted')}catch(e){out.bad.push('rejected')}}
+    /* Web Share is used when available, else the file downloads */
+    let shared=null;Object.defineProperty(navigator,'canShare',{value:d=>!!(d&&d.files&&d.files.length),configurable:true});Object.defineProperty(navigator,'share',{value:async d=>{shared=[d.files[0].name,d.files[0].size]},configurable:true});
+    out.share=await B.shareOrDownload(new Blob(['abc'],{type:'audio/mpeg'}),'x.mp3','t');out.shared=shared;
+    Object.defineProperty(navigator,'share',{value:async()=>{const e=new Error('x');e.name='AbortError';throw e},configurable:true});out.cancel=await B.shareOrDownload(new Blob(['abc']),'x.mp3','t');
+    return out});
+  assert(r.ok&&r.size<7000,'link '+JSON.stringify(r));eq(r.hash,'p=A'.slice(0,2)+r.hash.slice(2),'hash');eq(r.raw[0],111);eq(r.raw[2],64);eq(r.after[0],111);eq(r.after[1],'Link test');eq(r.after[2],1);assert(r.after[3],'auto lane in link');
+  eq(r.big[0],false);eq(r.big[1],'size');assert(r.bad.every(x=>x==='rejected'),'hostile links: '+r.bad);eq(r.share,'shared');eq(r.shared[0],'x.mp3');eq(r.cancel,'cancelled');
+  /* standalone player: a single HTML file with audio + controls + lyrics */
+  const html=await pg.evaluate(async()=>{const B=__beat,wav=B.audioBufferToWav(await B.renderOffline('loop'),16);const u8=new Uint8Array(await wav.arrayBuffer());return B.playerHtml('My <b>song</b>',B.b64std(u8),[{sec:0,text:'First line'},{sec:1,text:'Second line'}],100)});
+  assert(!/https?:\/\//.test(html.replace(/http:\/\/www\.w3\.org[^"']*/g,'')),'player has no network references');assert(html.includes('My &lt;b&gt;song&lt;/b&gt;'),'title escaped');
+  const p2=await o.ctx.newPage();await p2.setContent(html);
+  const pl=await p2.evaluate(async()=>{const au=document.getElementById('au');await new Promise(r=>au.readyState>=1?r():au.addEventListener('loadedmetadata',r));document.getElementById('pp').click();await new Promise(r=>setTimeout(r,300));const playing=!au.paused;const txt=document.getElementById('pp').textContent;au.currentTime=1.2;await new Promise(r=>setTimeout(r,400));const ly=document.getElementById('ly').textContent;
+    document.getElementById('lp').click();const loop=au.loop;document.getElementById('pp').click();return{dur:au.duration,playing,txt,ly,loop,paused:au.paused}});
+  assert(pl.dur>1,'player audio loads');assert(pl.playing&&/Pause/.test(pl.txt),'play button works '+JSON.stringify(pl));eq(pl.ly,'Second line');assert(pl.loop&&pl.paused,'loop + pause');
+  noErr(o);await close(o);return `link ${r.size} chars round-trips; big project falls back; Web Share + cancel; player ${(html.length/1e3).toFixed(0)} kB works`;
+});
+
+await test('[B] opening a shared link (#p=…) loads the project at startup and clears the hash',async()=>{
+  const o=await open();
+  const link=await o.page.evaluate(async()=>{const B=__beat;B.setBpm(133);B.S.name='From link';return (await B.buildProjectLink()).link.split('#')[1]});
+  await close(o);
+  const o2=await open({url:BASE+'#'+link});await o2.page.waitForFunction(()=>__beat.S.name==='From link',null,{timeout:8000});
+  const r=await o2.page.evaluate(()=>[__beat.S.bpm,location.hash]);eq(r[0],133);eq(r[1],'');noErr(o2);await close(o2);return 'link opened → project loaded, hash cleared';
+});
+
 /* ===================================================================== */
 await browser.close();if(srv)srv.s.close();
 const failed=results.filter(r=>!r.ok);

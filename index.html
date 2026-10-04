@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-civ/3PyXTSMcqpdn67/1ycMofEcK7aZ2h9qtnYbUWaM='; style-src 'unsafe-inline'; img-src 'self' data: blob:; font-src data:; media-src 'self' blob: data:; connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-k/MvXY/ok8fcvWGjiUt3KdrEbebDr6kWqpjKofxoAz0='; style-src 'unsafe-inline'; img-src 'self' data: blob:; font-src data:; media-src 'self' blob: data:; connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="description" content="Music Making App — a free browser step sequencer, piano roll, DAW timeline and synth with MP3/WAV/MIDI export. No install, works offline.">
 <link rel="canonical" href="https://swellyis.github.io/music-app/">
 <meta property="og:type" content="website">
@@ -596,6 +596,11 @@ dialog::backdrop{background:rgba(8,12,14,.55);backdrop-filter:blur(2px)}
   <button class="export-opt" id="exMp3"><b>MP3</b><div><strong>Song · MP3</strong><span>Compressed song render, encoded in your browser (no upload).</span></div></button>
   <button class="export-opt" id="exStems"><b>ZIP</b><div><strong>Stems · one WAV per track</strong><span>Every track rendered separately (before master compression), all the same length, in one .zip.</span></div></button>
   <button class="export-opt" id="exMidi"><b>MID</b><div><strong>MIDI file</strong><span>All tracks (drums on channel 10), tempo and notes of the arrangement.</span></div></button>
+  <button class="export-opt" id="exFlac"><b>FLAC</b><div><strong>Song · FLAC (lossless)</strong><span>Bit-exact, about half the size of WAV; uses the WAV depth above.</span></div></button>
+  <button class="export-opt" id="exShare"><b>SEND</b><div><strong>Share song…</strong><span>Opens your device's share sheet with an MP3 (downloads instead if sharing is unavailable).</span></div></button>
+  <button class="export-opt" id="exLink"><b>LINK</b><div><strong>Copy project link</strong><span>The whole arrangement packed into the link itself (no audio files; large projects fall back to a file).</span></div></button>
+  <button class="export-opt" id="exPlayer"><b>HTML</b><div><strong>Standalone player</strong><span>One .html file with the rendered song and simple controls — plays anywhere, offline.</span></div></button>
+  <button class="export-opt" id="exShareProject"><b>SEND</b><div><strong>Share project file…</strong><span>Send the .json project (with embedded audio) through the share sheet.</span></div></button>
   <button class="export-opt" id="exJson"><b>JSON</b><div><strong>Project file</strong><span>Everything needed to re-open this project later (Import).</span></div></button>
 </div></div></dialog>
 <dialog id="loopDlg" aria-labelledby="loopTitle"><div class="dlg-head"><h2 id="loopTitle">Loop library</h2><button class="secondary-btn" data-close>Close</button></div><div class="dlg-body"><p class="drop-hint" style="display:block">Loops are synthesised right here in your browser (nothing is downloaded). Each one lands on the timeline at the playhead and follows your project tempo.</p><div class="export-grid" id="loopList"></div></div></dialog>
@@ -4076,12 +4081,189 @@ function wireLauncher(){
     if(c)lnLaunch(+c.dataset.t,+c.dataset.p);else if(s)lnScene(+s.dataset.scene);else if(st){const ti=+st.dataset.stop;if(!L.on)lnSetOn(true);if(T.playing)L.queue[ti]=-1;else L.active[ti]=-1;renderLauncher()}});
   $('#lnOn').onclick=()=>lnSetOn(!L.on);$('#lnRec').onclick=()=>lnSetRec(!L.rec);$('#lnStopAll').onclick=lnStopAll;
 }
+/* ===== Milestone B3/B10: sharing (Web Share, project link, standalone player) and FLAC export ===== */
+/* ---- FLAC encoder: fixed predictors (order 0-4) + partitioned Rice coding, 16/24-bit, independent channels ---- */
+const FLAC_CRC8=(()=>{const t=new Uint8Array(256);for(let i=0;i<256;i++){let c=i;for(let k=0;k<8;k++)c=c&128?((c<<1)^7)&255:(c<<1)&255;t[i]=c}return t})();
+const FLAC_CRC16=(()=>{const t=new Uint16Array(256);for(let i=0;i<256;i++){let c=i<<8;for(let k=0;k<8;k++)c=c&0x8000?((c<<1)^0x8005)&0xFFFF:(c<<1)&0xFFFF;t[i]=c}return t})();
+function flacBits(){
+  let buf=new Uint8Array(1<<16),n=0,acc=0,nb=0;
+  const ensure=k=>{if(n+k>buf.length){const b=new Uint8Array(buf.length*2);b.set(buf);buf=b}};
+  return{
+    put(v,k){ /* k<=32 */
+      if(k>24){this.put(Math.floor(v/65536),k-16);this.put(v%65536,16);return}
+      acc=acc*Math.pow(2,k)+(v>>>0&(k===32?0xFFFFFFFF:(1<<k)-1));nb+=k;
+      while(nb>=8){nb-=8;const p=Math.pow(2,nb);const b=Math.floor(acc/p);acc-=b*p;ensure(1);buf[n++]=b&255}
+    },
+    unary(q){while(q>=24){this.put(0,24);q-=24}this.put(1,q+1)}, /* q zeros then a one */
+    align(){if(nb)this.put(0,8-nb)},
+    bytes(){return buf.subarray(0,n)},get len(){return n}
+  };
+}
+function flacSubframe(bw,x,off,len,bps){
+  /* choose the fixed predictor order with the smallest residual sum */
+  let best=0,bestSum=Infinity,constant=true;
+  for(let i=1;i<len;i++)if(x[off+i]!==x[off]){constant=false;break}
+  if(constant){bw.put(0,1);bw.put(0,6);bw.put(0,1);bw.put(x[off]<0?x[off]+Math.pow(2,bps):x[off],bps);return}
+  const res=(o)=>{const r=new Float64Array(len-o);
+    for(let i=o;i<len;i++){const a=off+i;let p=0;
+      if(o===1)p=x[a-1];else if(o===2)p=2*x[a-1]-x[a-2];else if(o===3)p=3*x[a-1]-3*x[a-2]+x[a-3];else if(o===4)p=4*x[a-1]-6*x[a-2]+4*x[a-3]-x[a-4];
+      r[i-o]=x[a]-p}return r};
+  let bestRes=null;
+  for(let o=0;o<=4&&o<len;o++){const r=res(o);let s=0;for(let i=0;i<r.length;i++)s+=Math.abs(r[i]);if(s<bestSum){bestSum=s;best=o;bestRes=r}}
+  bw.put(0,1);bw.put(8+best,6);bw.put(0,1);
+  for(let i=0;i<best;i++)bw.put(x[off+i]<0?x[off+i]+Math.pow(2,bps):x[off+i],bps);
+  /* partitioned Rice residual */
+  let po=0;while(po<4&&(len>>(po+1))>best&&(len%(1<<(po+1)))===0)po++;
+  bw.put(0,2);bw.put(po,4);
+  const parts=1<<po,per=len>>po;let idx=0;
+  for(let p=0;p<parts;p++){
+    const cnt=p===0?per-best:per,u=new Array(cnt);let sum=0;
+    for(let i=0;i<cnt;i++){const r=bestRes[idx+i];const z=r>=0?r*2:-r*2-1;u[i]=z;sum+=z}
+    idx+=cnt;const mean=cnt?sum/cnt:0;let k=mean>1?Math.min(14,Math.max(0,Math.floor(Math.log2(mean*.69+1)))):0;
+    bw.put(k,4);
+    for(let i=0;i<cnt;i++){const z=u[i];bw.unary(Math.floor(z/Math.pow(2,k)));if(k)bw.put(z%Math.pow(2,k),k)}
+  }
+}
+async function flacEncode(buf,bits,onProg){
+  bits=bits===24?24:16;const nch=Math.min(2,buf.numberOfChannels),sr=buf.sampleRate,BS=4096,scale=bits===24?8388607:32767;
+  let total=buf.length;const d=[];for(let c=0;c<nch;c++)d.push(buf.getChannelData(c));
+  while(total>sr&&Math.max(Math.abs(d[0][total-1]),Math.abs(d[nch-1][total-1]))<.0004)total--;total=Math.min(buf.length,total+Math.floor(sr*.15));
+  const parts=[];
+  /* STREAMINFO */
+  const si=new Uint8Array(42),dv=new DataView(si.buffer);si.set([0x66,0x4C,0x61,0x43,0x80,0,0,34]);
+  dv.setUint16(8,BS);dv.setUint16(10,BS);
+  dv.setBigUint64(18,(BigInt(sr)<<44n)|(BigInt(nch-1)<<41n)|(BigInt(bits-1)<<36n)|BigInt(total));
+  parts.push(si);
+  const frames=Math.ceil(total/BS),ints=[new Int32Array(BS),new Int32Array(BS)];
+  for(let f=0;f<frames;f++){
+    const off=f*BS,len=Math.min(BS,total-off);
+    for(let c=0;c<nch;c++){const s=d[c],o=ints[c];for(let i=0;i<len;i++){const v=Math.round(Math.max(-1,Math.min(1,s[off+i]))*scale);o[i]=v}}
+    const bw=flacBits();
+    /* header */
+    const h=[0xFF,0xF8];const bsCode=len===BS?12:(len<=256?6:7),srCode=sr===44100?9:sr===48000?10:sr===96000?11:sr===32000?8:sr===22050?4:sr===16000?5:0;
+    h.push((bsCode<<4)|srCode);h.push(((nch===2?1:0)<<4)|((bits===24?6:4)<<1));
+    /* UTF-8 coded frame number */
+    if(f<128)h.push(f);else if(f<2048)h.push(0xC0|(f>>6),0x80|(f&63));else if(f<65536)h.push(0xE0|(f>>12),0x80|((f>>6)&63),0x80|(f&63));else h.push(0xF0|(f>>18),0x80|((f>>12)&63),0x80|((f>>6)&63),0x80|(f&63));
+    if(bsCode===6)h.push(len-1);else if(bsCode===7)h.push((len-1)>>8,(len-1)&255);
+    let crc=0;for(const b of h)crc=FLAC_CRC8[crc^b];h.push(crc);
+    h.forEach(b=>bw.put(b,8));
+    for(let c=0;c<nch;c++)flacSubframe(bw,ints[c],0,len,bits);
+    bw.align();
+    const body=bw.bytes();let c16=0;for(let i=0;i<body.length;i++)c16=((c16<<8)&0xFFFF)^FLAC_CRC16[((c16>>8)^body[i])&255];
+    const out=new Uint8Array(body.length+2);out.set(body);out[body.length]=c16>>8;out[body.length+1]=c16&255;parts.push(out);
+    if(f%48===47){if(onProg)onProg((f+1)/frames);await new Promise(r=>setTimeout(r,0))}
+  }
+  return new Blob(parts,{type:'audio/flac'});
+}
+/* ---- Web Share ---- */
+async function shareOrDownload(blob,name,title){
+  try{
+    const file=new File([blob],name,{type:blob.type||'application/octet-stream'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})&&navigator.share){await navigator.share({files:[file],title:title||name});return 'shared'}
+  }catch(e){if(e&&e.name==='AbortError')return 'cancelled'}
+  download(blob,name);return 'downloaded';
+}
+async function shareSong(setLabel){
+  if(!needSong())return;setLabel('Rendering…');const buf=await renderOffline('song');setLabel('Encoding…');
+  const blob=await mp3Encode(buf,exKbps(),p=>setLabel('Encoding '+Math.round(p*100)+'%')),r=await shareOrDownload(blob,safeName()+'.mp3',S.name);
+  toast(r==='shared'?'Shared':r==='cancelled'?'Share cancelled':'Sharing is not available here — MP3 downloaded instead');
+}
+/* ---- project link: deflate-raw + base64url in the URL hash (no audio, size-limited) ---- */
+const LINK_MAX=7000,LINK_INFLATED_MAX=3e6;
+const b64u=u8=>{let s='';for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')};
+const unb64u=s=>{s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u};
+async function streamBytes(stream,limit){
+  const rd=stream.getReader(),parts=[];let n=0;
+  for(;;){const {done,value}=await rd.read();if(done)break;n+=value.length;if(n>limit){try{rd.cancel()}catch(e){}throw new Error('too large')}parts.push(value)}
+  const out=new Uint8Array(n);let o=0;parts.forEach(p=>{out.set(p,o);o+=p.length});return out;
+}
+async function projectLinkData(){
+  const o=serialize();o.app='music-making-app';let dropped=0;
+  o.tracks.forEach(t=>{if(t.kind==='audio'&&t.clips.length){dropped+=t.clips.length;t.clips=[]}if(t.sample){delete t.sample;dropped++}});
+  const txt=JSON.stringify(o),cs=new Blob([new TextEncoder().encode(txt)]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+  return{data:await streamBytes(cs,2e6),dropped,raw:txt.length};
+}
+async function buildProjectLink(){
+  if(typeof CompressionStream==='undefined')return{ok:false,reason:'unsupported'};
+  const {data,dropped,raw}=await projectLinkData(),link=location.href.split('#')[0]+'#p='+b64u(data);
+  if(link.length>LINK_MAX)return{ok:false,reason:'size',size:link.length,raw,dropped};
+  return{ok:true,link,size:link.length,dropped};
+}
+async function decodeProjectLink(link){
+  const m=/#p=([A-Za-z0-9_-]+)$/.exec(link);if(!m||m[1].length>LINK_MAX*2)throw new Error('bad link');
+  const ds=new Blob([unb64u(m[1])]).stream().pipeThrough(new DecompressionStream('deflate-raw')),bytes=await streamBytes(ds,LINK_INFLATED_MAX);
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+async function loadProjectLink(link,opts){
+  const raw=await decodeProjectLink(link),r=await importProjectObject(raw,{});
+  if(!(opts&&opts.skipConfirm)&&!await guardUnsaved('Open the shared project?','Open'))return false;
+  loadProjectObj(r.project,'Shared project opened');libId=null;lsSet(LS_LIBID,'');setSaveState('Shared project (not saved yet)');return true;
+}
+async function copyProjectLink(){
+  try{
+    const r=await buildProjectLink();
+    if(!r.ok){
+      if(r.reason==='unsupported'){toast('This browser cannot compress links — use “Project file” instead');return r}
+      toast('This project is too big for a link ('+Math.round(r.size/1000)+' kB) — downloading the project file instead',4200);exportProject();return r;
+    }
+    let copied=false;try{await navigator.clipboard.writeText(r.link);copied=true}catch(e){}
+    if(!copied)await askText('Project link','Copy this link (select all, Ctrl/Cmd+C):',r.link,'Done');
+    toast((copied?'Link copied':'Link ready')+' · '+r.size+' characters'+(r.dropped?' · audio clips are not included':''),3600);return r;
+  }catch(e){console.warn(e);toast('Could not make a link');return{ok:false}}
+}
+async function loadFromHash(){
+  if(!/^#p=/.test(location.hash))return;const link=location.href;
+  try{await loadProjectLink(link,{skipConfirm:!dirty&&!H.undo.length})}catch(e){console.warn('shared link rejected',e&&e.message);toast('That project link is not valid')}
+  try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}
+}
+/* ---- one-file standalone player ---- */
+const lrcEsc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function playerHtml(title,b64,lyrics,bpm){
+  const ly=JSON.stringify(lyrics||[]).replace(/</g,'\\u003c');
+  return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+lrcEsc(title)+'</title><style>'+
+  ':root{color-scheme:light dark;font-family:system-ui,sans-serif}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#16161d;color:#f4efe8}main{width:min(92vw,460px);padding:24px;border-radius:18px;background:#22222c;box-shadow:0 12px 40px #0008}h1{font-size:1.2rem;margin:0 0 4px}p{margin:0 0 14px;color:#b9b3aa;font-size:.85rem}'+
+  'button{font:inherit;font-weight:700;border:0;border-radius:999px;padding:10px 20px;background:#ff5e35;color:#fff;cursor:pointer}button:focus-visible,input:focus-visible{outline:3px solid #7fd1ff;outline-offset:2px}input[type=range]{width:100%;margin:14px 0 4px}.t{display:flex;justify-content:space-between;font:12px ui-monospace,monospace;color:#b9b3aa}#ly{min-height:3.2em;margin-top:14px;font-size:1.05rem;text-align:center}label{font-size:.85rem;color:#b9b3aa;margin-left:10px}'+
+  '</style></head><body><main><h1>'+lrcEsc(title)+'</h1><p>Made with Music Making App'+(bpm?' · '+Math.round(bpm)+' BPM':'')+'</p><button id="pp" aria-label="Play">▶ Play</button><label><input type="checkbox" id="lp"> Loop</label><input type="range" id="sk" min="0" max="1000" value="0" aria-label="Seek"><div class="t"><span id="a">0:00</span><span id="b">0:00</span></div><div id="ly" aria-live="polite"></div>'+
+  '<audio id="au" preload="auto" src="data:audio/mpeg;base64,'+b64+'"></audio></main><script>'+
+  '(function(){var au=document.getElementById("au"),pp=document.getElementById("pp"),sk=document.getElementById("sk"),A=document.getElementById("a"),B=document.getElementById("b"),ly=document.getElementById("ly"),L='+ly+';'+
+  'function f(t){t=Math.max(0,t|0);return(t/60|0)+":"+("0"+t%60).slice(-2)}'+
+  'pp.onclick=function(){au.paused?au.play():au.pause()};au.onplay=function(){pp.textContent="❚❚ Pause"};au.onpause=function(){pp.textContent="▶ Play"};'+
+  'document.getElementById("lp").onchange=function(e){au.loop=e.target.checked};'+
+  'sk.oninput=function(){if(au.duration)au.currentTime=sk.value/1000*au.duration};'+
+  'au.ontimeupdate=function(){var d=au.duration||0;A.textContent=f(au.currentTime);B.textContent=f(d);if(d&&document.activeElement!==sk)sk.value=au.currentTime/d*1000;var cur="";for(var i=0;i<L.length;i++)if(L[i].sec<=au.currentTime)cur=L[i].text;ly.textContent=cur};'+
+  'au.onloadedmetadata=function(){B.textContent=f(au.duration)};})();'+
+  '<\/script></body></html>';
+}
+async function exportPlayerFile(setLabel){
+  if(!needSong())return;setLabel('Rendering…');const buf=await renderOffline('song');setLabel('Encoding…');
+  const blob=await mp3Encode(buf,128,p=>setLabel('Encoding '+Math.round(p*100)+'%')),u8=new Uint8Array(await blob.arrayBuffer());
+  const html=playerHtml(S.name||'My beat',b64std(u8),lyricsForPlayer(),S.bpm);
+  download(new Blob([html],{type:'text/html'}),safeName()+'-player.html');toast('Standalone player downloaded · '+(html.length/1e6).toFixed(1)+' MB · one file, works offline',3800);
+}
+function b64std(u8){let s='';for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s)}
+function lyricsForPlayer(){return(S.lyrics||[]).map(l=>({sec:l.t*barDurSec(),text:l.text}))}
+async function exportFlacFile(setLabel){
+  if(!needSong())return;setLabel('Rendering…');toast('Rendering '+S.songBars+'-bar song…',1800);
+  const t0=performance.now(),buf=await renderOffline('song');setLabel('Encoding FLAC…');
+  const blob=await flacEncode(buf,exBits(),p=>setLabel('FLAC '+Math.round(p*100)+'%'));download(blob,safeName()+'.flac');
+  toast('FLAC ('+exBits()+'-bit lossless, '+(blob.size/1e6).toFixed(1)+' MB) downloaded · '+((performance.now()-t0)/1000).toFixed(1)+' s');
+}
+function wireShare(){
+  const close=()=>$('#exportDlg').close(),bind=(id,fn)=>{const e=$(id);if(e)e.addEventListener('click',fn)};
+  bind('#exFlac',()=>{close();runExport('flac',[$('#exFlac')],exportFlacFile)});
+  bind('#exPlayer',()=>{close();runExport('player',[$('#exPlayer')],exportPlayerFile)});
+  bind('#exShare',()=>{close();runExport('share',[$('#exShare')],shareSong)});
+  bind('#exLink',()=>{close();copyProjectLink()});
+  bind('#exShareProject',async()=>{close();const o=await projectJSON();const r=await shareOrDownload(new Blob([JSON.stringify(o)],{type:'application/json'}),safeName()+'.json',S.name);toast(r==='shared'?'Shared':r==='cancelled'?'Share cancelled':'Project file downloaded')});
+  window.addEventListener('hashchange',()=>{loadFromHash()});
+  loadFromHash();
+}
 /* wires every Milestone B control (called once from init) and exposes test hooks */
 function wireB(){
-  wireClipTools();wireFreeRoll();wireLauncher();
+  wireClipTools();wireFreeRoll();wireLauncher();wireShare();
 }
 function hooksB(){
-  return{analyzeAsset,analysisCache,autoDetectClip,clipById,get selectedClip(){return selectedClip},set selectedClip(v){selectedClip=v},renderClipTools,sliceClipAtTransients,LOOPS,addLoopToProject,renderLoopDef,L,lnLaunch,lnScene,lnSetOn,lnSetRec,lnCommit,renderLauncher,lnApplyQueue,FR,frAdd,frList,frDraw,frSetTrack,frKey,
+  return{analyzeAsset,analysisCache,autoDetectClip,clipById,get selectedClip(){return selectedClip},set selectedClip(v){selectedClip=v},renderClipTools,sliceClipAtTransients,LOOPS,addLoopToProject,renderLoopDef,flacEncode,shareOrDownload,buildProjectLink,loadProjectLink,decodeProjectLink,playerHtml,b64std,exportPlayerFile,copyProjectLink,loadFromHash,L,lnLaunch,lnScene,lnSetOn,lnSetRec,lnCommit,renderLauncher,lnApplyQueue,FR,frAdd,frList,frDraw,frSetTrack,frKey,
     clipStretchRate,reversedBuf,serialize,autoVal,lfoVal,autoTarget,syncAutoParams,remapAuto,audioBufferToWav,registerAudio,addAudioClip,refitClipLen,srcBarSec,stretchNeeded,PREF};
 }
 /* ====================================================================
