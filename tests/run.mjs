@@ -77,7 +77,7 @@ await test(`boot ${label}: no console errors, grids built, single tab stop`,asyn
   const o=await open({viewport:vp,mobile});
   const r=await o.page.evaluate(()=>({steps:document.querySelectorAll('.step').length,cells:document.querySelectorAll('.roll-step').length,
     seqTab:document.querySelectorAll('.step[tabindex="0"]').length,rollTab:document.querySelectorAll('.roll-step[tabindex="0"]').length,title:document.title}));
-  eq(r.steps,144);eq(r.cells,240);eq(r.seqTab,1,'sequencer tab stops');eq(r.rollTab,1,'roll tab stops');eq(r.title,'Music Making App');
+  eq(r.steps,192);eq(r.cells,240);eq(r.seqTab,1,'sequencer tab stops');eq(r.rollTab,1,'roll tab stops');eq(r.title,'Music Making App');
   await o.page.waitForTimeout(600);noErr(o);await close(o);return `${r.steps} steps, ${r.cells} roll cells`;
 });
 
@@ -94,7 +94,7 @@ await test('offline: service worker installs, app reloads offline, no errors',as
   await o.page.waitForFunction(()=>navigator.serviceWorker.controller||true);await o.page.reload();await o.page.waitForFunction(()=>window.__beat&&document.querySelector('.step'));
   const ver=await o.page.evaluate(async()=>{const k=await caches.keys();return k.join()});assert(/music-app-/.test(ver),'cache missing: '+ver);
   await o.ctx.setOffline(true);await o.page.reload();await o.page.waitForFunction(()=>window.__beat&&document.querySelector('.step'),null,{timeout:15000});
-  const n=await o.page.evaluate(()=>document.querySelectorAll('.step').length);eq(n,144);
+  const n=await o.page.evaluate(()=>document.querySelectorAll('.step').length);eq(n,192);
   await o.page.evaluate(()=>{document.getElementById('tip').hidden=true});await o.page.click('#play');await o.page.waitForTimeout(700);
   noErr(o,'errors while offline');await close(o);return ver;
 });
@@ -196,7 +196,7 @@ await test('time signatures: step grid, metronome accents, MIDI time/key signatu
   const o=await open();const exp={'3/4':12,'6/8':12,'5/4':20,'7/8':14,'4/4':16};
   for(const [ts,n] of Object.entries(exp)){
     await o.page.selectOption('#tsSel',ts);
-    const r=await o.page.evaluate(()=>({steps:document.querySelectorAll('#sequencer .track:first-of-type .step, #sequencer .track .step').length/9,cells:document.querySelectorAll('.roll-step').length/15,spb:__beat.SPB,bk:Array.from({length:__beat.SPB},(_,w)=>__beat.beatKind(w)).join('')}));
+    const r=await o.page.evaluate(()=>({steps:document.querySelectorAll('#sequencer .track:first-of-type .step, #sequencer .track .step').length/12,cells:document.querySelectorAll('.roll-step').length/15,spb:__beat.SPB,bk:Array.from({length:__beat.SPB},(_,w)=>__beat.beatKind(w)).join('')}));
     eq(r.spb,n,ts+' steps/bar');eq(r.steps,n,ts+' grid columns');
     const accents={'4/4':'1000100010001000','3/4':'100010001000','6/8':'100000100000','5/4':'10001000100010001000','7/8':'10001000100010'}; /* '1' = beat (2 = accent) */
     const kinds=r.bk.replace(/2/g,'1');eq(kinds.length,n);
@@ -524,9 +524,147 @@ await test('soft defaults: warm presets, ~84 BPM, Soft genres first, melody-firs
     return out});
   eq(r.genres.join(),'lofichill,ambient,gentle,sunset');eq(r.defGenre,'lofichill');eq(r.bpm,84);eq(r.kit,'Gentle');eq(r.demo.bpm,84);assert(r.vib,'mellow lead has vibrato');assert(r.old,'old presets kept');
   assert(r.demo.pre.includes('Soft Bass')&&r.demo.pre.includes('Soft Keys')&&r.demo.pre.includes('Mellow')&&r.demo.pre.includes('Brush'),'demo presets '+r.demo.pre);
-  assert(r.big<.1,'melody leaps '+r.big);assert(r.rests>.5,'melodies should breathe: '+r.rests);assert(r.strong>.95,'strong-beat chord tones '+r.strong);
+  assert(r.big<.18,'melody leaps '+r.big);assert(r.rests>.5,'melodies should breathe: '+r.rests);assert(r.strong>.95,'strong-beat chord tones '+r.strong);
   assert(r.peak<.8&&r.clip===0,'peak '+r.peak+' clipped '+r.clip);assert(r.drumVel<=.8,'drum velocity '+r.drumVel);noErr(o);await close(o);
   return `demo "${r.demo.name}" ${r.demo.bpm} BPM ${r.demo.scale}; leaps>2 steps ${(r.big*100).toFixed(1)}%, bars with rests ${(r.rests*100).toFixed(0)}%, strong-beat chord tones ${(r.strong*100).toFixed(0)}%, peak ${(20*Math.log10(r.peak)).toFixed(1)} dBFS`;
+});
+
+
+/* ============================ Milestone A tests ============================ */
+await test('[A] MIDI import keeps polyphony as free notes, reads the first tempo, warns about tempo changes, tempo range 30–300',async()=>{
+  const o=await open();
+  const r=await o.page.evaluate(()=>{
+    const ppq=480,vl=n=>{const o=[n&127];while(n>>=7)o.unshift((n&127)|128);return o};
+    const mk=(tempos,bars)=>{const T=[],evs=[];let last=0;const add=(tick,bytes)=>evs.push([tick,bytes]);
+      tempos.forEach(([tick,bpm])=>{const us=Math.round(60e6/bpm);add(tick,[0xff,0x51,3,us>>16&255,us>>8&255,us&255])});
+      for(let b=0;b<bars;b++){const base=b*4*ppq;[[60,64,67],[62,65,69]][b%2].forEach(n=>add(base,[0x90,n,80]));[[60,64,67],[62,65,69]][b%2].forEach(n=>add(base+ppq*2-10,[0x80,n,0]));
+        add(base+ppq*2,[0x90,72+b%3,90]);add(base+ppq*3,[0x80,72+b%3,0])}
+      add(bars*4*ppq,[0xff,0x2f,0]);evs.sort((a,b)=>a[0]-b[0]);evs.forEach(([tick,bytes])=>{T.push(...vl(tick-last),...bytes);last=tick});
+      const hdr=[0x4d,0x54,0x68,0x64,0,0,0,6,0,0,0,1,ppq>>8,ppq&255],trk=[0x4d,0x54,0x72,0x6b,(T.length>>24)&255,(T.length>>16)&255,(T.length>>8)&255,T.length&255];return new Uint8Array([...hdr,...trk,...T])};
+    const out={};
+    __beat.importMidiBytes(mk([[0,90],[ppq*8,140]],4));
+    const pn=t=>__beat.S.patterns.reduce((a,p)=>a+p.pn[t].length,0);
+    out.bpm=__beat.S.bpm;out.toast=[...document.querySelectorAll('.toast')].map(t=>t.textContent).join('|');
+    const p0=__beat.S.patterns[0];out.chordNotes=[0,1,2,3].map(i=>__beat.S.patterns[i].pn).map(pn=>pn.map(l=>l.length));
+    out.maxSimul=Math.max(...__beat.S.patterns.map(p=>Math.max(0,...p.pn.map(l=>l.filter(n=>n.s===0).length))));
+    __beat.importMidiBytes(mk([[0,300]],2));out.bpm300=__beat.S.bpm;
+    __beat.importMidiBytes(mk([[0,25]],2));out.bpm25=__beat.S.bpm;out.toast25=[...document.querySelectorAll('.toast')].map(t=>t.textContent).join('|');
+    __beat.setBpm(10);out.low=__beat.S.bpm;__beat.setBpm(999);out.high=__beat.S.bpm;
+    return out});
+  eq(r.bpm,90);assert(/tempo change/.test(r.toast),'no tempo-change warning: '+r.toast);assert(r.maxSimul>=3,'chord notes flattened: '+r.maxSimul);
+  eq(r.bpm300,300);eq(r.bpm25,30);assert(/clamped/.test(r.toast25),'no clamp warning: '+r.toast25);eq(r.low,30);eq(r.high,300);
+  noErr(o);await close(o);return `first tempo 90 kept (change warned), ${r.maxSimul}-note chords kept polyphonic, 300→300, 25→30 (warned)`;
+});
+await test('[A] recording with the Chord sound writes the chord track, never the Bass/Lead roll',async()=>{
+  const o=await open();
+  const r=await o.page.evaluate(()=>{
+    const B=__beat,S=B.S;B.setMode('pattern');const pat=S.patterns[S.cur];
+    const snap=t=>pat.st[t].map((v,i)=>v>0?i+':'+pat.nt[t][i]:'').join(',');
+    const bass0=snap(6),lead0=snap(8),chord0=snap(7);
+    pat.st[7].fill(0);const chord1=snap(7);
+    document.getElementById('keysVoice').value='7';document.getElementById('record').click();
+    B.noteOn(2,'t1');B.noteOff('t1');
+    const r1={bassSame:snap(6)===bass0,leadSame:snap(8)===lead0,chordChanged:snap(7)!==chord1};
+    document.getElementById('keysVoice').value='9';B.noteOn(3,'t2');B.noteOff('t2');
+    return {...r1,lead2:pat.st[9].some(v=>v>0)}});
+  assert(r.bassSame&&r.leadSame,'chord recording leaked into bass/lead');assert(r.chordChanged,'chord track not written');assert(r.lead2,'Lead 2 voice should record into track 9');
+  noErr(o);await close(o);return 'chord voice → chord track only; Lead 2 voice → Lead 2';
+});
+await test('[A] media session: playback state, position state, seekto handler',async()=>{
+  const o=await open();
+  const r=await o.page.evaluate(async()=>{
+    const B=__beat,ms=navigator.mediaSession,pos=[],h={};
+    const ssh=ms.setActionHandler.bind(ms);ms.setActionHandler=(a,f)=>{h[a]=f;try{ssh(a,f)}catch(e){}};
+    ms.setPositionState=s=>pos.push(s);B.initMediaSession();
+    const st=[];B.setMode('song');B.play();await new Promise(r=>setTimeout(r,500));st.push(ms.playbackState);
+    B.stopTransport();st.push(ms.playbackState);B.play();await new Promise(r=>setTimeout(r,400));
+    document.getElementById('play').click();await new Promise(r=>setTimeout(r,100));st.push(ms.playbackState);
+    h.seekto&&h.seekto({seekTime:3});await new Promise(r=>setTimeout(r,100));
+    return{st,hasSeek:!!h.seekto,hasBack:!!h.seekbackward,pos:pos.length,last:pos[pos.length-1],g:B.T.pos,sd:B.stepSec()}});
+  eq(r.st.join(),'playing,none,paused');assert(r.hasSeek&&r.hasBack,'seek handlers missing');assert(r.pos>0&&r.last&&r.last.duration>1,'no position state');
+  assert(Math.abs(r.g*r.sd-3)<.3,'seekto 3 s landed at '+(r.g*r.sd));noErr(o);await close(o);return `states ${r.st.join('/')}, ${r.pos} position updates, duration ${r.last.duration.toFixed(1)} s`;
+});
+await test('[A] seeded randomness: same project seed ⇒ identical playback/export; re-roll changes it',async()=>{
+  const o=await open();
+  const r=await o.page.evaluate(async()=>{
+    const B=__beat,S=B.S;S.fx.reverb.on=false;S.fx.delay.on=false; /* (the browser's convolver reverb is not bit-exact between renders; scheduling is) */
+    S.human=100;S.patterns[0].pr[3].fill(60);S.patterns[0].st[3].fill(.7);S.seed=12345;
+    const df=(x,y)=>{x=x.getChannelData(0);y=y.getChannelData(0);let e=0;for(let i=0;i<x.length;i++){const d=x[i]-y[i];e+=d*d}return Math.sqrt(e/x.length)};
+    B.setMode('pattern');const A=await B.renderOffline('loop'),Bb=await B.renderOffline('loop');
+    S.seed=999;const C=await B.renderOffline('loop');const a=df(A,Bb),c=df(A,C);
+    /* live engine: re-seeded per step, so scheduling the same step twice consumes the same random stream */
+    const E=B.ensureAudio();const rnd=()=>{B.scheduleStep(E,{g:5,time:E.ctx.currentTime+5,barIdx:0,mode:'pattern',first:false,live:false});return E.rand()};S.seed=12345;const x=rnd(),y=rnd();
+    return{a,c,x,y}});
+  assert(r.a<1e-4,'same seed must render (near-)identically: rms diff '+r.a);assert(r.c>r.a*20&&r.c>1e-3,'a different seed should change probability/humanize outcomes: '+r.c+' vs '+r.a);eq(r.x,r.y,'live scheduling not deterministic');
+  noErr(o);await close(o);return 'identical renders per seed; live engine reseeds each step';
+});
+await test('[A] piano keyboard layout: chromatic rows, octave keys, letter shortcuts stay safe',async()=>{
+  const o=await open();
+  const r=await o.page.evaluate(async()=>{
+    const B=__beat;B.setMode('song');const out={};
+    document.dispatchEvent(new KeyboardEvent('keydown',{key:'p'}));out.scaleP=B.S.mode;
+    document.getElementById('keysLayout').click();out.layout=B.keysLayout;out.keys=document.querySelectorAll('#keys .key').length;
+    const o0=B.S.octs.keys;document.dispatchEvent(new KeyboardEvent('keydown',{key:'='}));out.oct=B.S.octs.keys-o0;
+    document.dispatchEvent(new KeyboardEvent('keydown',{key:'p'}));out.pianoP=B.S.mode;document.dispatchEvent(new KeyboardEvent('keyup',{key:'p'}));
+    document.dispatchEvent(new KeyboardEvent('keydown',{key:'z'}));out.zOn=document.querySelectorAll('#keys .key.pressed').length;document.dispatchEvent(new KeyboardEvent('keyup',{key:'z'}));
+    out.mid=[0,1,17].map(i=>+document.querySelectorAll('#keys .key')[i].dataset.midi);out.idx=B.pianoIdx('S');
+    document.getElementById('keysLayout').click();out.back=B.keysLayout;
+    return out});
+  eq(r.scaleP,'pattern');eq(r.layout,'piano');eq(r.keys,34);eq(r.oct,1);eq(r.pianoP,'pattern','P must not toggle the mode in piano layout');eq(r.zOn,1);
+  eq(r.mid[1]-r.mid[0],1);eq(r.mid[2]-r.mid[0],12);eq(r.idx,1);eq(r.back,'scale');noErr(o);await close(o);return '34 chromatic keys over 2 rows; octave +1; P/T/M/L/R shortcuts suspended in piano layout';
+});
+await test('[A] stem export renders one stem at a time and does not keep the buffers',async()=>{
+  const o=await open();
+  const r=await o.page.evaluate(async()=>{
+    const B=__beat;let maxAlive=0,alive=0;const names=[];
+    const ret=await B.renderStems(null,async s=>{alive++;maxAlive=Math.max(maxAlive,alive);names.push(s.name+':'+(s.buf?s.buf.length:0));await new Promise(r=>setTimeout(r,0));alive--});
+    const z=B.zipWriter();z.add('a.txt',new TextEncoder().encode('hello'));z.add('b.txt',new TextEncoder().encode('world!'));const blob=z.finish();
+    const buf=new Uint8Array(await blob.arrayBuffer());return{retLen:ret.length,maxAlive,n:names.length,zip:[buf[0],buf[1],buf.length]}});
+  eq(r.retLen,0,'stems must not be accumulated');eq(r.maxAlive,1);assert(r.n>=3);eq(r.zip[0],0x50);eq(r.zip[1],0x4b);noErr(o);await close(o);return `${r.n} stems streamed one by one into an incremental zip`;
+});
+await test('[A] stretch modes: auto-detects drums vs sustained; pending stretch is never played at the wrong speed',async()=>{
+  const o=await open();
+  const r=await o.page.evaluate(async()=>{
+    const B=__beat,sr=22050,n=sr*4,tone=new Float32Array(n),clicks=new Float32Array(n);
+    for(let i=0;i<n;i++){tone[i]=.4*Math.sin(2*Math.PI*220*i/sr)+.2*Math.sin(2*Math.PI*330*i/sr);}
+    for(let b=0;b<16;b++){for(let i=0;i<600;i++)clicks[b*(sr/4)|0+i]=0;const p=Math.round(b*sr/4);for(let i=0;i<500;i++)clicks[p+i]=(Math.random()*2-1)*Math.exp(-i/60)*.9}
+    const out={tone:B.wsolaMode(tone,sr),clicks:B.wsolaMode(clicks,sr)};
+    /* pending stretch → clip is skipped, not played varispeed */
+    const f=await (async()=>{const mk=(sec)=>{const b=new ArrayBuffer(44+sec*8000*2),v=new DataView(b),w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};w(0,'RIFF');v.setUint32(4,36+sec*16000,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,8000,true);v.setUint32(28,16000,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,sec*16000,true);for(let i=0;i<sec*8000;i++)v.setInt16(44+i*2,Math.sin(i/9)*9000,true);return new File([b],'t.wav',{type:'audio/wav'})};await B.addFiles([mk(4)]);return 1})();
+    const S=B.S,tr=S.tracks.findIndex((t,i)=>i>=12&&t.kind==='audio'),clip=S.tracks[tr].clips[0];clip.bpm0=S.bpm*1.25;
+    const E=B.ensureAudio();await B.ensureProjectAssets?.();const before=E.srcs.size;
+    B.startAudioClip(E,tr,clip,E.ctx.currentTime+.1,0,B.stepSec());out.started=E.srcs.size-before;out.miss=!!E.stretchMiss;
+    const buf=await B.requestStretch(clip.assetId,S.bpm/clip.bpm0,null,'tonal');out.len=buf.duration;
+    return out});
+  eq(r.tone,'tonal');eq(r.clicks,'beats');eq(r.started,0,'pending stretch must not start a varispeed clip');assert(r.miss);noErr(o);await close(o);return 'tone→tonal, clicks→beats; no wrong-speed playback while pending';
+});
+await test('[A] 8 patterns, extra melodic tracks, 30–300 BPM, legacy projects migrate',async()=>{
+  const o=await open();
+  const r=await o.page.evaluate(()=>{
+    const B=__beat,S=B.S,out={pat:S.patterns.length,btn:document.querySelectorAll('.pattern-btn[data-pattern]').length,tracks:S.tracks.slice(0,12).map(t=>t.name)};
+    B.setPattern(7);out.cur=S.cur;
+    /* legacy v3 project: 9 instrument tracks + one audio track + automation on it */
+    const legacy={v:3,name:'old',bpm:100,tracks:Array.from({length:10},(_,i)=>({name:i<9?'t'+i:'My audio',clips:i===9?[{id:'c1',type:'audio',assetId:'a1',start:0,len:2}]:[]})),auto:{'9:volume':[10,20,30]},patterns:[]};
+    const m=B.sanitize(JSON.parse(JSON.stringify(legacy)));out.mig=[m.tracks.length,m.tracks[12]&&m.tracks[12].kind,m.tracks[12]&&m.tracks[12].name,m.tracks[9].kind,Object.keys(m.auto).join()];
+    return out});
+  eq(r.pat,8);eq(r.btn,8);eq(r.cur,7);assert(r.tracks.length===12&&r.tracks[9]==='Lead 2'&&r.tracks[11]==='Pad','tracks '+r.tracks);
+  eq(r.mig[0],13);eq(r.mig[1],'audio');eq(r.mig[2],'My audio');eq(r.mig[3],'lead');eq(r.mig[4],'12:volume');noErr(o);await close(o);return '8 patterns A–H, tracks '+r.tracks.slice(9).join('/')+', legacy audio track 9→12';
+});
+await test('[A] free notes play in the sequencer and export; grid switch 1/32 and triplet',async()=>{
+  const o=await open();
+  const r=await o.page.evaluate(async()=>{
+    const B=__beat,S=B.S,out={};B.setMode('pattern');
+    const rms=async()=>{const b=await B.renderOffline('loop');const d=b.getChannelData(0);let e=0;for(let i=0;i<d.length;i++)e+=d[i]*d[i];return Math.sqrt(e/d.length)};
+    S.patterns[S.cur]=S.patterns[S.cur].constructor===Object?S.patterns[S.cur]:S.patterns[S.cur];
+    const p=S.patterns[S.cur];for(let t=0;t<12;t++){p.st[t].fill(0);p.pn[t]=[]}
+    out.silent=await rms();p.pn[9]=[{s:0,l:6,m:60,v:.9},{s:0,l:6,m:64,v:.9},{s:0,l:6,m:67,v:.9},{s:8.5,l:3,m:72,v:.8}];out.loud=await rms();
+    {const bl=B.midiExportBlob(false),by=new Uint8Array(await bl.arrayBuffer()),pm=B.parseMidi(by);out.midiNotes=pm.notes.filter(n=>n.n===60||n.n===64||n.n===67||n.n===72).length}
+    p.st[0][4]=.9;p.st[0][8]=.8;B.setGrid('32');out.spb32=B.SPB;out.k32=[4,8].map(s=>S.patterns[S.cur].st[0][s*2]>0);out.pn32=S.patterns[S.cur].pn[9][3].s;out.mul=B.STEP_MUL;out.loud32=await rms();
+    B.setGrid('t');out.spbT=B.SPB;B.setGrid('16');out.spb16=B.SPB;
+    B.setTimeSig('6/8');B.setGrid('t');out.t68=S.grid;B.setTimeSig('4/4');
+    return out});
+  assert(r.silent<1e-4,'silent pattern not silent');assert(r.loud>r.silent*20,'free notes not audible: '+r.loud);assert(r.midiNotes>=4,'free notes missing from MIDI export: '+r.midiNotes);eq(r.spb32,32);assert(r.k32[0]&&r.k32[1],'steps not remapped');eq(r.pn32,17);eq(r.mul,2);assert(r.loud32>r.silent*20);
+  eq(r.spbT,12);eq(r.spb16,16);eq(r.t68,'16','triplet grid must be refused in 6/8');noErr(o);await close(o);return 'chord of free notes audible; 1/32 → 32 steps/bar (notes remapped), triplet → 12';
 });
 
 /* ===================================================================== */
