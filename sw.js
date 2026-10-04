@@ -1,6 +1,6 @@
 /* Music Making App service worker — precaches the whole app shell for offline use.
    VERSION changes whenever any shipped file changes, which triggers the in-app "new version" prompt. */
-const VERSION = '78a70d2c83';
+const VERSION = '232a6fe4e1';
 const CACHE = 'music-app-' + VERSION;
 const ASSETS = ["./","index.html","manifest.webmanifest","icons/apple-touch-icon.png","icons/favicon-16.png","icons/favicon-32.png","icons/favicon.ico","icons/icon-192.png","icons/icon-512.png","icons/icon-maskable-192.png","icons/icon-maskable-512.png","icons/og-image.png"];
 

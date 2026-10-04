@@ -667,6 +667,155 @@ await test('[A] free notes play in the sequencer and export; grid switch 1/32 an
   eq(r.spbT,12);eq(r.spb16,16);eq(r.t68,'16','triplet grid must be refused in 6/8');noErr(o);await close(o);return 'chord of free notes audible; 1/32 → 32 steps/bar (notes remapped), triplet → 12';
 });
 
+
+/* ---------- Milestone B ---------- */
+/* in-page helper: drum loop (kick on beats, hat off-beats) at `bpm`, optionally with a held chord, as a WAV File */
+const mkLoopSrc=`(bpm,sec,notes,sr)=>{sr=sr||22050;const n=Math.round(sec*sr),x=new Float32Array(n),st=60/bpm;
+ for(let t=0,i=0;t<sec-.3;t+=st/2,i++){const s=Math.floor(t*sr),kick=i%2===0,len=Math.floor(sr*(kick?.15:.04));for(let j=0;j<len&&s+j<n;j++){const e=Math.exp(-j/(len/4));x[s+j]+=kick?Math.sin(2*Math.PI*(60+80*Math.exp(-j/400))*j/sr)*e*.8:((j*7919%101)/50-1)*e*.25}}
+ (notes||[]).forEach(m=>{const f=440*Math.pow(2,(m-69)/12);for(let i=0;i<n;i++)x[i]+=Math.sin(2*Math.PI*f*i/sr)*.12});
+ const b=new ArrayBuffer(44+n*2),v=new DataView(b),w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
+ w(0,'RIFF');v.setUint32(4,36+n*2,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,n*2,true);
+ for(let i=0;i<n;i++)v.setInt16(44+i*2,Math.max(-1,Math.min(1,x[i]))*32000,true);return new File([b],'loop-'+bpm+'.wav',{type:'audio/wav'})}`;
+await test('[B] tempo + key detection in a Worker; source BPM auto-filled, editable; clip follows project tempo; key offered',async()=>{
+  const o=await open();
+  const r=await o.page.evaluate(`(async()=>{const mk=${mkLoopSrc};const B=__beat;B.setBpm(100);
+    await B.addFiles([mk(93,14,[57,60,64,69])]);
+    for(let i=0;i<80&&!B.analysisCache[B.clipById(B.selectedClip).clip.assetId];i++)await new Promise(r=>setTimeout(r,150));
+    await new Promise(r=>setTimeout(r,200));
+    const h=B.clipById(B.selectedClip),c=h.clip,an=B.analysisCache[c.assetId];
+    const out={bpm:an.bpm,conf:an.conf,key:an.key&&an.key.name,bpm0:c.bpm0,ckey:c.key,onsets:an.onsets.length,len:c.len,rate:B.S.bpm/c.bpm0,visible:!document.getElementById('clipTools').hidden,info:document.getElementById('ctInfo').textContent,btn:document.getElementById('ctSetKey').textContent};
+    document.getElementById('ctSetKey').click();out.setKey=[B.S.key,B.S.scale];
+    const ib=document.getElementById('ctBpm');ib.value='186';ib.dispatchEvent(new Event('change'));out.edited=B.clipById(B.selectedClip).clip.bpm0;
+    document.getElementById('ctHalf').click();out.half=B.clipById(B.selectedClip).clip.bpm0;
+    return out})()`);
+  assert(Math.abs(r.bpm-93)<1.5,'tempo '+JSON.stringify(r));assert(r.conf>.3,'confidence '+r.conf);eq(r.key,'A minor');eq(r.bpm0,r.bpm,'source BPM not auto-filled');
+  assert(r.onsets>10,'onsets');assert(r.visible,'clip tools hidden');eq(r.setKey[0],9);eq(r.setKey[1],'minor');eq(r.edited,186);eq(r.half,93);
+  assert(Math.abs(r.len-14/(240/93))<.1,'clip length should fit the audio at its source tempo: '+r.len);noErr(o);await close(o);
+  return `93 BPM detected as ${r.bpm} (conf ${r.conf.toFixed(2)}), key ${r.key}, ${r.onsets} onsets; edit/÷2 work`;
+});
+await test('[B] clip tools: gain, fades, reverse, pitch shift (tempo kept), slice at transients; they render and persist',async()=>{
+  const o=await open();
+  const r=await o.page.evaluate(`(async()=>{const mk=${mkLoopSrc};const B=__beat;B.setBpm(90);B.setMode('song');B.S.tracks.slice(0,12).forEach(t=>{t.muted=true});
+    await B.addFiles([mk(90,8,[])]);const h0=B.clipById(B.selectedClip),c=h0.clip;c.bpm0=90;c.start=0;
+    const rms=async(a,b)=>{const buf=await B.renderOffline('song');const d=buf.getChannelData(0);const s=Math.floor(a*buf.sampleRate),e=Math.floor(b*buf.sampleRate);let x=0;for(let i=s;i<e;i++)x+=d[i]*d[i];return Math.sqrt(x/(e-s))};
+    const out={};out.base=await rms(.2,3);c.gain=.25;out.quiet=await rms(.2,3);c.gain=1;
+    c.fadeIn=2;out.fadeStart=await rms(0,.3);out.afterFade=await rms(2.2,3.5);c.fadeIn=0;
+    out.pitchQ=B.clipStretchRate((c.pitch=12,c));c.pitch=0;
+    const buf=B.assets[c.assetId].buffer,rev=B.reversedBuf(buf);out.revOK=rev.getChannelData(0)[0]===buf.getChannelData(0)[buf.length-1]&&rev.length===buf.length;
+    c.rev=true;out.revRms=await rms(.2,3);c.rev=false;
+    await B.analyzeAsset(c.assetId);const n=B.sliceClipAtTransients(B.clipById(c.id),7);out.slices=n;
+    const cl=B.S.tracks[h0.ti].clips;out.sum=cl.reduce((a,x)=>a+x.len,0);out.contig=cl.every((x,i)=>!i||Math.abs(x.start-(cl[i-1].start+cl[i-1].len))<.01);
+    const san=B.sanitize2({v:3,nt:12,tracks:Array.from({length:13},(_,i)=>i<12?{name:'t'+i}:{name:'a',kind:'audio',clips:[{id:'x',type:'audio',assetId:'q1',start:1,len:.05,gain:3,fadeIn:2,rev:true,pitch:40,key:'A minor'}]})});
+    const sc=san.tracks.flatMap(t=>t.clips)[0];out.san=sc?[sc.gain,sc.fadeIn,sc.rev,sc.pitch,sc.key,sc.len]:null;
+    return out})()`);
+  assert(r.base>.01,'no audio');assert(r.quiet<r.base*.4,'gain not applied '+r.quiet+' vs '+r.base);assert(r.fadeStart<r.base*.5,'fade-in not applied '+JSON.stringify(r));
+  assert(r.afterFade>r.base*.5,'fade should be over by 2 s');assert(Math.abs(r.pitchQ-1/Math.pow(2,1))<1e-6,'pitch +12 → stretch rate 0.5: '+r.pitchQ);assert(r.revOK,'reverse buffer');assert(r.revRms>.005,'reverse silent');
+  assert(r.slices>=3,'slices '+r.slices);assert(r.contig,'slices not contiguous');assert(r.san&&r.san[0]===2&&r.san[1]===2&&r.san[2]===true&&r.san[3]===24&&r.san[4]==='A minor','sanitize '+JSON.stringify(r.san));
+  noErr(o);await close(o);return `gain/fades/reverse/pitch render correctly; sliced into ${r.slices} contiguous clips`;
+});
+await test('[B] loop library: loops are synthesised offline, land on the timeline at their own tempo',async()=>{
+  const o=await open();
+  const r=await o.page.evaluate(async()=>{const B=__beat;B.setBpm(100);const def=B.LOOPS.find(d=>d.id==='lofi-drums');const c=await B.addLoopToProject(def);
+    const a=B.assets[c.assetId];const d=a.buffer.getChannelData(0);let e=0;for(let i=0;i<d.length;i++)e+=d[i]*d[i];
+    return{n:B.LOOPS.length,bpm0:c.bpm0,dur:a.dur,rms:Math.sqrt(e/d.length),len:c.len,bpm:B.S.bpm,stateOK:B.S.name!==undefined&&B.S.bpm===100}});
+  assert(r.n>=8,'loops');eq(r.bpm0,84);assert(Math.abs(r.dur-4*4*60/84)<.05,'loop is exactly 4 bars at 84 BPM: '+r.dur);assert(r.rms>.005,'loop silent');eq(r.bpm,100);
+  assert(Math.abs(r.len-(4*60*4/84)/(240/84))<.1,'len');noErr(o);await close(o);return `${r.n} loops; drum loop ${r.dur.toFixed(2)} s, project tempo untouched`;
+});
+
+await test('[B] free-pitch piano roll: draw/move/resize with the pointer, chords, keyboard editing, plays, exports to MIDI, saved in the project',async()=>{
+  const o=await open();const pg=o.page;
+  await pg.evaluate(()=>{const B=__beat;B.setMode('pattern');const p=B.S.patterns[B.S.cur];for(let t=0;t<12;t++){p.st[t].fill(0);p.pn[t]=[]}B.frSetTrack(9);document.getElementById('frSnap').value='1';document.getElementById('frSnap').dispatchEvent(new Event('change'));B.frDraw()});
+  const cv=pg.locator('#frCanvas');await cv.scrollIntoViewIfNeeded();const bb=await cv.boundingBox();
+  const cw=bb.width/16,rh=12,at=(s,row)=>[bb.x+s*cw+cw*.3,bb.y+row*rh+rh/2];
+  /* draw a note by dragging across 3 steps, then a second note at the same time, a different pitch (a chord) */
+  let [x,y]=at(2,10);await pg.mouse.move(x,y);await pg.mouse.down();await pg.mouse.move(x+cw*2.4,y,{steps:4});await pg.mouse.up();
+  [x,y]=at(2,14);await pg.mouse.move(x,y);await pg.mouse.down();await pg.mouse.move(x+cw*3,y,{steps:4});await pg.mouse.up();
+  let notes=await pg.evaluate(()=>JSON.parse(JSON.stringify(__beat.frList())));
+  eq(notes.length,2,'two notes drawn');assert(notes.every(n=>n.s===2),'start snapped to step 2: '+JSON.stringify(notes));assert(notes[0].l>=3&&notes[1].l>=3,'lengths '+JSON.stringify(notes));assert(notes[0].m!==notes[1].m,'two pitches');
+  /* move: drag the first note 2 steps right and 2 rows up */
+  [x,y]=at(2.5,10);await pg.mouse.move(x,y);await pg.mouse.down();await pg.mouse.move(x+cw*2,y-rh*2,{steps:5});await pg.mouse.up();
+  const moved=await pg.evaluate(()=>JSON.parse(JSON.stringify(__beat.frList()))[0]);eq(moved.s,4);eq(moved.m,notes[0].m+2);
+  /* keyboard: cursor, add, resize, velocity, move, delete */
+  await cv.focus();const r0=await pg.evaluate(()=>{const B=__beat;B.FR.cur={s:8,m:B.FR.lo+20};B.frDraw();return B.frList().length});
+  await pg.keyboard.press('Enter');await pg.keyboard.press('Shift+ArrowRight');await pg.keyboard.press('Shift+ArrowUp');await pg.keyboard.press('Alt+ArrowUp');
+  const kn=await pg.evaluate(()=>{const B=__beat,l=B.frList();return{n:l.length,last:JSON.parse(JSON.stringify(l[l.length-1])),cur:B.FR.cur.m,lo:B.FR.lo}});
+  eq(kn.n,r0+1);assert(kn.last.l>=3,'resized by keyboard '+JSON.stringify(kn));assert(kn.last.v>.8,'velocity up');eq(kn.last.m,kn.lo+21,'moved up one semitone');eq(kn.cur,kn.last.m);
+  await pg.waitForTimeout(150);const live=await pg.evaluate(()=>document.getElementById('srLive').textContent);assert(/step/.test(live),'announced: '+live);
+  await pg.keyboard.press('Delete');eq(await pg.evaluate(()=>__beat.frList().length),r0);
+  /* plays + exports + persists */
+  const r=await pg.evaluate(async()=>{const B=__beat;const rms=async()=>{const b=await B.renderOffline('loop');const d=b.getChannelData(0);let e=0;for(let i=0;i<d.length;i++)e+=d[i]*d[i];return Math.sqrt(e/d.length)};
+    const loud=await rms();const mn=B.parseMidi(new Uint8Array(await B.midiExportBlob(false).arrayBuffer())).notes.length;
+    const keep=B.frList().length;return{loud,mn,keep}});
+  assert(r.loud>.003,'free roll notes silent '+r.loud);assert(r.mn>=2,'MIDI export has the notes: '+r.mn);
+  const saved=await pg.evaluate(()=>{const B=__beat,o=B.sanitize2(JSON.parse(JSON.stringify(B.serialize(false))));return o.patterns[B.S.cur].pn[9].length});eq(saved,2,'notes survive serialize → sanitize');
+  /* double-click deletes */
+  [x,y]=at(2.5,14);await pg.mouse.dblclick(x,y);eq(await pg.evaluate(()=>__beat.frList().length),1,'double-click deletes');
+  assert(await pg.evaluate(()=>!!document.getElementById('frCanvas').getAttribute('aria-label')),'aria label');noErr(o);await close(o);
+  return 'draw/move/resize by pointer, chord of 2 notes, keyboard add/resize/velocity/move/delete, audible, in MIDI export and project JSON';
+});
+
+await test('[B] finer automation: curve shapes, LFO, track filter/delay/drive + master targets, UI, render, persistence',async()=>{
+  const o=await open();const pg=o.page;
+  const r=await pg.evaluate(async()=>{
+    const B=__beat,S=B.S,out={};B.setMode('song');
+    S.auto['0:volume']=Array(64).fill(0);S.auto['0:volume'][0]=0;S.auto['0:volume'][1]=100;
+    const v=(sh,f,lfo)=>{S.autoCfg={'0:volume':{shape:sh,lfo:lfo||null}};return B.autoVal('0:volume',0,f)};
+    out.lin=v('linear',.5);out.step=v('step',.5);out.ease=v('ease',.5);out.outc=v('out',.5);out.smooth=v('smooth',.25);
+    out.lfoA=v('linear',.25,{shape:'sine',rate:1,depth:40});out.lfoB=v('linear',.25,{shape:'sine',rate:1,depth:40});out.noLfo=v('linear',.25);
+    out.shapes=['sine','tri','square','saw','rand'].map(s=>B.lfoVal(s,.3));out.rand1=B.lfoVal('rand',2.7)===B.lfoVal('rand',2.2);
+    /* UI: master target switches the parameter list; shape + LFO controls write autoCfg */
+    S.auto={};S.autoCfg={};const tr=document.getElementById('automationTrack'),pr=document.getElementById('automationParam');
+    document.getElementById('toggleAutomation').click();tr.value='m';tr.dispatchEvent(new Event('change'));out.masterParams=[...pr.options].map(x=>x.value).join();
+    pr.value='filter';pr.dispatchEvent(new Event('change'));
+    const sh=document.getElementById('autoShape');sh.value='smooth';sh.dispatchEvent(new Event('change'));
+    const ls=document.getElementById('autoLfoShape');ls.value='tri';ls.dispatchEvent(new Event('change'));
+    const dp=document.getElementById('autoLfoDepth');dp.value='50';dp.dispatchEvent(new Event('input'));
+    out.cfg=JSON.parse(JSON.stringify(S.autoCfg['m:filter']||null));out.lane=!!S.auto['m:filter'];
+    tr.value='2';tr.dispatchEvent(new Event('change'));out.trackParams=[...pr.options].map(x=>x.value).join();
+    /* persistence */
+    S.auto['4:drive']=Array(64).fill(60);S.auto['m:gain']=Array(64).fill(80);S.autoCfg['4:drive']={shape:'ease',lfo:{shape:'saw',rate:2,depth:20}};
+    const s2=B.sanitize2(JSON.parse(JSON.stringify(B.serialize(false))));out.keys=Object.keys(s2.auto).sort().join();out.cfgBack=s2.autoCfg['4:drive']&&s2.autoCfg['4:drive'].lfo&&s2.autoCfg['4:drive'].lfo.shape;
+    const bad=B.sanitize2({v:3,auto:{'m:volume':[1],'3:reverb':[1],'m:gain':[50,60]},autoCfg:{'m:gain':{shape:'evil',lfo:{shape:'x',rate:99,depth:500}}}});out.badKeys=Object.keys(bad.auto).join();out.badCfg=JSON.stringify(bad.autoCfg['m:gain']);
+    return out});
+  assert(Math.abs(r.lin-50)<.01&&r.step===0&&Math.abs(r.ease-25)<.01&&Math.abs(r.outc-75)<.01&&Math.abs(r.smooth-15.625)<.01,'shapes '+JSON.stringify(r));
+  assert(r.lfoA===r.lfoB&&Math.abs((r.lfoA-r.noLfo)-20)<.01,'LFO deterministic, ±depth/2: '+r.lfoA+' '+r.noLfo);assert(r.rand1,'random LFO holds within a cycle');
+  eq(r.masterParams,'filter,reverb,delay,gain');eq(r.trackParams,'volume,pan,tone,space,filter,delay,drive');assert(r.lane&&r.cfg&&r.cfg.shape==='smooth'&&r.cfg.lfo&&r.cfg.lfo.shape==='tri'&&r.cfg.lfo.depth===50,'UI → cfg '+JSON.stringify(r.cfg));
+  eq(r.keys,'4:drive,m:filter,m:gain');eq(r.cfgBack,'saw');eq(r.badKeys,'m:gain');assert(/"shape":"linear"/.test(r.badCfg)&&/"rate":16/.test(r.badCfg)&&/"depth":100/.test(r.badCfg),'hostile cfg clamped '+r.badCfg);
+  /* the lanes change the rendered sound (master gain lane to zero ⇒ silence; track filter lane closes the lead) */
+  const q=await pg.evaluate(async()=>{
+    const B=__beat,S=B.S;B.setMode('song');let lastD=null;const rms=async()=>{const b=await B.renderOffline('song');const d=b.getChannelData(0);let e=0,h=0;for(let i=0;i<d.length;i++){e+=d[i]*d[i];if(i)h+=(d[i]-d[i-1])*(d[i]-d[i-1])}const prev=lastD;lastD=Float32Array.from(d);let df=0;if(prev){const n=Math.min(prev.length,d.length);for(let i=0;i<n;i++)df+=(d[i]-prev[i])*(d[i]-prev[i]);df=Math.sqrt(df/n)}return{e:Math.sqrt(e/d.length),h:Math.sqrt(h/d.length),df}};
+    S.auto={};S.autoCfg={};const base=await rms();
+    S.auto['m:gain']=Array(64).fill(0);const quiet=await rms();S.auto={};
+    S.tracks.forEach((t,i)=>{if(i<12&&i!==8)t.muted=true});S.auto['8:filter']=Array(64).fill(100);const open=await rms();S.auto['8:filter']=Array(64).fill(0);const shut=await rms();
+    S.auto['8:filter']=Array(64).fill(100);S.autoCfg['8:filter']={shape:'linear',lfo:{shape:'tri',rate:2,depth:100}};const sweep=await rms();
+    return{base,quiet,open,shut,sweep}});
+  assert(q.base.e>.01&&q.quiet.e<q.base.e*.02,'master gain lane: '+JSON.stringify(q));assert(q.shut.h<q.open.h*.6,'filter lane 0 should remove highs: '+JSON.stringify(q));assert(q.sweep.df>q.open.e*.02,'LFO on filter changes the sound '+JSON.stringify(q));
+  noErr(o);await close(o);return 'shapes/LFO exact; master + track filter/delay/drive lanes in UI, JSON and render';
+});
+
+await test('[B] clip launcher: bar-quantised launches, scenes, stop, and performance recording into the timeline',async()=>{
+  const o=await open();
+  const r=await o.page.evaluate(async()=>{
+    const B=__beat,S=B.S,L=B.L,out={},sleep=ms=>new Promise(r=>setTimeout(r,ms));
+    B.setBpm(240);S.tracks.forEach(t=>{t.clips=[]});for(const p of S.patterns){for(let t=0;t<12;t++){p.st[t].fill(0);p.pn[t]=[]}}
+    S.patterns[0].st[0][0]=.9;S.patterns[1].st[0][0]=.9;S.patterns[1].st[1][4]=.9;S.patterns[2].st[6][0]=.9;
+    out.grid=document.querySelectorAll('.ln-cell').length;
+    document.getElementById('lnRec').click();out.rec=L.rec;out.on=L.on;
+    B.lnLaunch(0,0);await sleep(300);out.a0=L.active.slice(0,3).join();       /* stopped → starts at once */
+    B.lnLaunch(0,1);out.queued=L.queue[0];out.stillA=L.active[0];                /* playing → quantised */
+    await sleep(1700);out.after=L.active[0];
+    B.lnScene(2);await sleep(1500);out.scene=L.active.slice(0,8).join();
+    B.lnLaunch(6,2);await sleep(1200);out.stopped=L.active[6];
+    const clipsBefore=S.tracks[0].clips.length;B.stopTransport();
+    out.clips0=S.tracks[0].clips.map(c=>[c.pattern,c.start,c.len]);out.mode=S.mode;out.recOff=L.rec;out.clipsBefore=clipsBefore;
+    out.cell=document.querySelector('.ln-cell[data-t="0"][data-p="0"]').getAttribute('aria-label');
+    return out});
+  eq(r.grid,96);assert(r.rec&&r.on,'rec + launcher on');eq(r.a0.split(',')[0],'0');eq(r.queued,1);eq(r.stillA,0,'launch must wait for the bar line');eq(r.after,1,'launched on the next bar');
+  assert(r.scene.split(',')[6]==='-1'||r.scene.split(',')[6]==='2','scene applied');assert(r.clips0.length>=1&&r.mode==='song','performance written to the timeline '+JSON.stringify(r.clips0));
+  assert(r.clips0.some(c=>c[0]===1),'pattern B recorded on the kick track '+JSON.stringify(r.clips0));assert(/pattern A/.test(r.cell),'cell labelled');noErr(o);await close(o);
+  return 'launch waits for the bar, scene + stop work, recorded '+r.clips0.length+' clip run(s) on the kick track';
+});
+
 /* ===================================================================== */
 await browser.close();if(srv)srv.s.close();
 const failed=results.filter(r=>!r.ok);
