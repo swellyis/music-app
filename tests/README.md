@@ -45,3 +45,5 @@ The PWA install/update flow is additionally exercised by the older scripts in th
 
 * Tests use the `window.__beat` debug hook that the app exposes (state, transport, import/export helpers).
 * Some tests render audio offline and take a few seconds.
+
+Tests named `[A] …` cover the bug-fix milestone, `[B] …` the feature milestone (detection, clip tools, free-pitch roll, launcher, automation, sharing, FLAC, video, lyrics, vocal tools, MIDI output). Use `--only "[B] "` to run just those.

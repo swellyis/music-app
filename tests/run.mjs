@@ -878,6 +878,88 @@ await test('[B] opening a shared link (#p=…) loads the project at startup and 
   const r=await o2.page.evaluate(()=>[__beat.S.bpm,location.hash]);eq(r[0],133);eq(r[1],'');noErr(o2);await close(o2);return 'link opened → project loaded, hash cleared';
 });
 
+await test('[B] lyrics: timed lines, current-line highlight in playback, LRC export/import, saved in the project, hostile input clamped',async()=>{
+  const o=await open();const pg=o.page;
+  const r=await pg.evaluate(async()=>{
+    const B=__beat,S=B.S,out={},sleep=ms=>new Promise(r=>setTimeout(r,ms));
+    B.setBpm(240);S.name='Lyric song';S.mode='song';
+    document.getElementById('lyAdd').click();const inp=document.querySelector('#lyList li .ly-x');inp.value='Hello world';inp.dispatchEvent(new Event('change',{bubbles:true}));
+    S.lyrics.push({t:1,text:'Second line'});S.lyrics.sort((a,b)=>a.t-b.t);B.renderLyrics();
+    out.n=S.lyrics.length;out.rows=document.querySelectorAll('#lyList li').length;
+    const lrc=B.lyricsToLrc();out.lrc=lrc.split('\n').slice(0,8);
+    const back=B.parseLrc('[ti:x]\n[00:00.50]Line A\n[00:01.00][00:02.00]Chorus\nno stamp\n[99:99.99]'+'x'.repeat(500),B.S.bpm?60/B.S.bpm*4:1);out.back=back.map(l=>[l.t,l.text.length]);
+    S.lyrics=[{t:0,text:'Hello world'},{t:1,text:'Second line'}];B.renderLyrics();
+    document.getElementById('play').click();await sleep(1500);out.now1=document.getElementById('lyNow').textContent;out.lit=document.querySelector('#lyList li.now .ly-x')&&document.querySelector('#lyList li.now .ly-x').value;
+    B.stopTransport();
+    const s2=B.sanitize2({v:3,lyrics:[{t:3,text:'b\u0000<img>'},{t:-5,text:'a'},{t:'x',text:5},{t:1e9,text:'z'.repeat(999)}].concat(Array.from({length:300},(_,i)=>({t:i%10,text:'q'})))});
+    out.san=[s2.lyrics.length,s2.lyrics[0].t,s2.lyrics.every(l=>l.text.length<=200&&!/[\u0000-\u001f]/.test(l.text))];
+    const rt=B.sanitize2(JSON.parse(JSON.stringify(B.serialize(false))));out.rt=rt.lyrics.length;
+    return out});
+  eq(r.n,2);eq(r.rows,2);assert(/^\[ti:Lyric song\]/.test(r.lrc[0]),'lrc title');assert(r.lrc.some(l=>/^\[00:00\.00\]Hello world/.test(l)),'first stamp '+r.lrc);assert(r.lrc.some(l=>/^\[00:01\.00\]Second line/.test(l)),'second stamp (1 bar at 240 BPM = 1 s) '+r.lrc);
+  assert(r.back.length===4&&r.back[0][1]===6,'LRC import '+JSON.stringify(r.back));assert(r.back.every(b=>b[1]<=200),'import clamps text');
+  eq(r.now1,'Second line','current line shown during playback');eq(r.lit,'Second line');assert(r.san[0]>=195&&r.san[0]<=200,'lyrics capped at 200: '+r.san[0]);assert(r.san[2],'sanitised text');eq(r.rt,2);
+  noErr(o);await close(o);return 'timed lines, live highlight, LRC round-trip, sanitised';
+});
+await test('[B] visualizer: fullscreen, and WebM video export (canvas + audio) of one playthrough',async()=>{
+  const o=await open();const pg=o.page;
+  await pg.evaluate(()=>{const B=__beat;B.setBpm(240);B.setMode('pattern')});
+  await pg.click('#vizFull');await pg.waitForTimeout(400);
+  const fs1=await pg.evaluate(()=>[!!document.fullscreenElement,__beat.V?0:0]);
+  await pg.evaluate(()=>document.exitFullscreen&&document.fullscreenElement&&document.exitFullscreen());await pg.waitForTimeout(300);
+  const [dl]=await Promise.all([pg.waitForEvent('download',{timeout:25000}),pg.click('#vizRec')]);
+  const file=await dl.path();const size=fs.statSync(file).size;const head=fs.readFileSync(file).subarray(0,4).toString('hex');
+  let probe='';try{const cp=await import('child_process');probe=cp.execFileSync('ffprobe',['-v','error','-show_entries','stream=codec_type','-of','csv=p=0',file]).toString().trim().split(/\s+/).sort().join('+')}catch(e){}
+  const st=await pg.evaluate(()=>[__beat.VID.rec,document.getElementById('vizRec').getAttribute('aria-pressed')]);
+  assert(dl.suggestedFilename().endsWith('.webm'),'name');assert(size>3000,'video has data '+size);eq(head,'1a45dfa3','EBML/WebM header');if(probe)assert(/audio/.test(probe)&&/video/.test(probe),'video + audio streams: '+probe);
+  eq(st[0],null);eq(st[1],'false');noErr(o);await close(o);return `fullscreen ${fs1[0]?'works':'requested'}; WebM ${(size/1e3).toFixed(0)} kB${probe?' ('+probe+')':''}`;
+});
+await test('[B] vocal tools: take with count-in on a Vocal track (no monitoring), vocal chain changes the sound, trim + normalise',async()=>{
+  const o=await open();const pg=o.page;
+  const r=await pg.evaluate(`(async()=>{const mk=${mkWavSrc};const B=__beat,S=B.S,out={},sleep=ms=>new Promise(r=>setTimeout(r,ms));
+    B.setBpm(240);
+    /* fake microphone: an oscillator stream */
+    const ac=new AudioContext(),dst=ac.createMediaStreamDestination(),osc=ac.createOscillator(),gq=ac.createGain();gq.gain.value=.12;osc.frequency.value=220;osc.connect(gq);gq.connect(dst);osc.start();
+    navigator.mediaDevices.getUserMedia=async()=>dst.stream;
+    B.PREF.countIn=0;out.mon=B.PREF.monitor;
+    await B.startVocalTake();out.byUs=B.MIC.byUs;out.vocalFlag=B.MIC.vocal;await sleep(2600);out.playing=B.T.playing;
+    document.getElementById('micRecord').click();await sleep(1200);
+    const ti=S.tracks.findIndex(t=>t.vocal);out.ti=ti;out.name=S.tracks[ti]&&S.tracks[ti].name;out.clips=ti>=0?S.tracks[ti].clips.map(c=>c.name):[];out.rec=B.MIC.rec;out.monNode=B.MIC.mon||null;
+    /* vocal chain audible difference */
+    B.stopTransport();S.tracks.slice(0,12).forEach(t=>{t.muted=true});
+    const c=S.tracks[ti].clips[0];
+    const rms=async()=>{const b=await B.renderOffline('song');const d=b.getChannelData(0);let e=0;for(let i=0;i<d.length;i++)e+=d[i]*d[i];return Math.sqrt(e/d.length)};
+    S.mode='song';out.flagOnTake=S.tracks[ti].vocal;S.tracks[ti].vocal=false;const off=await rms();S.tracks[ti].vocal=true;const on=await rms();out.chain=[off,on];
+    /* trim + normalise on a clip with silence around a quiet tone */
+    S.tracks.slice(0,12).forEach(t=>{t.muted=false});
+    return out})()`);
+  assert(r.mon===false,'monitor off by default');assert(r.byUs,'count-in/backing playback started by the take');assert(r.vocalFlag,'vocal flag during take');assert(r.ti>=12&&r.name==='Vocal','Vocal track created');
+  assert(r.clips.length===1&&r.clips[0]==='Vocal take','take recorded on the Vocal track: '+JSON.stringify(r.clips));assert(r.rec===null,'recorder released');assert(!r.monNode,'mic not routed to speakers');
+  assert(r.chain[0]>.001&&Math.abs(r.chain[0]-r.chain[1])>r.chain[0]*.03,'vocal chain changes the sound '+JSON.stringify(r.chain));
+  const t=await pg.evaluate(`(async()=>{const B=__beat,S=B.S,sr=22050,n=sr*4,x=new Float32Array(n);for(let i=sr;i<sr*3;i++)x[i]=Math.sin(2*Math.PI*300*i/sr)*.1;
+    const b=new ArrayBuffer(44+n*2),v=new DataView(b),w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};w(0,'RIFF');v.setUint32(4,36+n*2,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,n*2,true);for(let i=0;i<n;i++)v.setInt16(44+i*2,x[i]*32767,true);
+    await B.addFiles([new File([b],'quiet.wav',{type:'audio/wav'})]);const h=B.clipById(B.selectedClip),c=h.clip;c.bpm0=B.S.bpm;const before=[c.offset||0,c.len,c.start];
+    B.vocalTrim();const mid=[c.offset,c.len,c.start];B.vocalNormalize();return{before,mid,gain:c.gain,fi:c.fadeIn}})()`);
+  assert(t.mid[0]>.8&&t.mid[0]<1.0,'trim moved the start to the first sound (~1 s): '+t.mid[0]);assert(t.mid[1]<t.before[1]*.65,'trim shortened the clip '+JSON.stringify(t));assert(t.gain>5||t.gain>1.8,'normalise raised the quiet take: '+t.gain);
+  noErr(o);await close(o);return `take on Vocal track, chain RMS ${r.chain[0].toFixed(3)}→${r.chain[1].toFixed(3)}, trim start ${t.mid[0]}s, gain ${t.gain}`;
+});
+await test('[B] MIDI output: notes (drums on ch 10) + clock + start/stop reach a Web MIDI port with look-ahead timestamps',async()=>{
+  const o=await open();const pg=o.page;
+  const r=await pg.evaluate(async()=>{
+    const B=__beat,S=B.S,sleep=ms=>new Promise(r=>setTimeout(r,ms)),log=[];
+    const out={id:'o1',name:'Mock synth',send:(m,t)=>log.push({m:[...m],t,now:performance.now()})};
+    navigator.requestMIDIAccess=async()=>({outputs:new Map([['o1',out]]),onstatechange:null});
+    B.setBpm(240);B.setMode('pattern');const p=S.patterns[S.cur];for(let t=0;t<12;t++){p.st[t].fill(0);p.pn[t]=[]}p.st[0][0]=.9;p.st[3][2]=.8;p.pn[9]=[{s:0,l:2,m:64,v:.8}];S.tracks.forEach(t=>{t.muted=false});
+    await B.midiOutConnect();B.midiOutPick('o1');const o2={connected:!!B.MO.out};
+    document.getElementById('play').click();await sleep(1500);B.stopTransport();await sleep(100);
+    const ons=log.filter(l=>(l.m[0]&0xF0)===0x90),offs=log.filter(l=>(l.m[0]&0xF0)===0x80&&l.m[2]===0);
+    return{o2,total:log.length,start:log.filter(l=>l.m[0]===0xFA).length,stop:log.filter(l=>l.m[0]===0xFC).length,clock:log.filter(l=>l.m[0]===0xF8).length,
+      drumCh:ons.filter(l=>l.m[0]===0x99).map(l=>l.m[1]).sort().join(),mel:ons.filter(l=>l.m[0]!==0x99).map(l=>[l.m[0]&15,l.m[1]]).slice(0,3),pairs:ons.length<=offs.length,
+      ahead:log.filter(l=>l.m[0]===0x90||l.m[0]===0x99).slice(0,3).every(l=>l.t>=l.now-5),label:document.getElementById('midiOutBtn').textContent}});
+  assert(r.o2.connected,'output selected');eq(r.start,1,'one MIDI start');assert(r.stop>=1,'stop sent');assert(r.clock>=6*16,'6 clock pulses per 16th step: '+r.clock);
+  assert(r.drumCh.includes('36')&&r.drumCh.includes('42'),'drums as GM notes on channel 10: '+r.drumCh);assert(r.mel.some(m=>m[1]===64),'free note 64 sent '+JSON.stringify(r.mel));assert(r.pairs,'every note-on has a note-off');assert(r.ahead,'timestamps are scheduled ahead of now');assert(/Mock synth/.test(r.label),'button shows the port');
+  noErr(o);await close(o);return `${r.total} messages: ${r.clock} clock pulses, start/stop, notes with matching offs`;
+});
+
 /* ===================================================================== */
 await browser.close();if(srv)srv.s.close();
 const failed=results.filter(r=>!r.ok);

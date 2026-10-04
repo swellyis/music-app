@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-k/MvXY/ok8fcvWGjiUt3KdrEbebDr6kWqpjKofxoAz0='; style-src 'unsafe-inline'; img-src 'self' data: blob:; font-src data:; media-src 'self' blob: data:; connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-HY3vibBR1bpDcAepc9mz31dNmkYFVm6Xpe+w75m9w3I='; style-src 'unsafe-inline'; img-src 'self' data: blob:; font-src data:; media-src 'self' blob: data:; connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="description" content="Music Making App — a free browser step sequencer, piano roll, DAW timeline and synth with MP3/WAV/MIDI export. No install, works offline.">
 <link rel="canonical" href="https://swellyis.github.io/music-app/">
 <meta property="og:type" content="website">
@@ -442,6 +442,10 @@ dialog::backdrop{background:rgba(8,12,14,.55);backdrop-filter:blur(2px)}
 .ln-cell[data-state=ready]{background:var(--panel-3)}.ln-cell[data-state=empty]{opacity:.45}.ln-cell[data-state=playing]{background:var(--accent);color:#fff;border-color:var(--accent)}
 .ln-cell[data-state=queued]{outline:2px dashed var(--accent-2);animation:lnq 0.8s steps(2) infinite}@keyframes lnq{50%{opacity:.5}}
 .launcher.on .ln-head .ln-scene{border-color:var(--accent-2)}@media(prefers-reduced-motion:reduce){.ln-cell[data-state=queued]{animation:none}}
+.viz-tools{display:flex;gap:8px;margin-top:6px}.master-viz:fullscreen{width:100vw;height:100vh;background:#000;border-radius:0}.master-viz:fullscreen canvas{width:100%;height:100%}
+.lyrics-panel,.vocal-tools{margin:14px auto 0;max-width:1320px;padding:0 14px}.ly-now{min-height:1.6em;font-weight:800;font-size:1.15rem;color:var(--accent);margin:4px 0}.ly-list{list-style:none;margin:6px 0;padding:0;display:grid;gap:5px;max-height:260px;overflow:auto}
+.ly-list li{display:flex;gap:6px;align-items:center;padding:3px 6px;border-radius:8px}.ly-list li.now{background:var(--panel-3);outline:2px solid var(--accent)}.ly-t{width:5.6rem}.ly-x{flex:1;min-width:120px}.ly-mon{font-size:11px;font-weight:700;display:flex;gap:6px;align-items:center}
+#midiOutDlg label{display:block;margin-top:10px;font-weight:700;font-size:.85rem}
 </style>
 </head>
 <body>
@@ -551,6 +555,7 @@ dialog::backdrop{background:rgba(8,12,14,.55);backdrop-filter:blur(2px)}
         <div class="effect"><button class="fx-toggle" data-fx="reverb" aria-label="Toggle reverb" aria-pressed="true"></button><label for="reverbAmt">Reverb</label><output id="reverbOut">60%</output><input id="reverbAmt" data-fx-range="reverb" type="range" min="0" max="100" value="60" aria-label="Reverb return level"></div>
       </section>
       <div class="master-viz" id="vizBox" title="Click to switch visualizer view"><canvas id="viz" aria-label="Live spectrum and waveform" role="img"></canvas></div>
+      <div class="viz-tools"><button class="secondary-btn" id="vizFull" title="Show the visualizer fullscreen (Esc to leave)">⛶ Fullscreen</button><button class="secondary-btn" id="vizRec" aria-pressed="false" title="Play the song once and save the visualizer with audio as a WebM video">● Record video</button></div>
       <div class="actions"><button class="primary" id="exportWav">Export song · WAV</button><button id="exportMp3">MP3</button><button id="exportMidi">MIDI file</button><button id="exportProject">Project file</button><button id="newProject">New project</button></div>
     </aside>
   </div>
@@ -577,6 +582,13 @@ dialog::backdrop{background:rgba(8,12,14,.55);backdrop-filter:blur(2px)}
  <div class="automation-panel" id="automationPanel"><div class="automation-controls"><label class="sr-only" for="automationTrack">Automation track</label><select id="automationTrack"></select><label class="sr-only" for="automationParam">Automation parameter</label><select id="automationParam"><option value="volume">Volume</option><option value="pan">Pan</option><option value="tone">Tone</option><option value="space">Space (reverb send)</option></select><label class="sr-only" for="autoShape">Curve shape</label><select id="autoShape"><option value="linear">Curve: linear</option><option value="ease">Curve: ease in</option><option value="out">Curve: ease out</option><option value="smooth">Curve: smooth S</option><option value="step">Curve: steps</option></select><label class="sr-only" for="autoLfoShape">LFO shape</label><select id="autoLfoShape"><option value="off">LFO: off</option><option value="sine">LFO: sine</option><option value="tri">LFO: triangle</option><option value="square">LFO: square</option><option value="saw">LFO: saw</option><option value="rand">LFO: random</option></select><label class="auto-lfo">Rate <input type="number" id="autoLfoRate" min="0.125" max="16" step="0.125" value="1" aria-label="LFO cycles per bar"> /bar</label><label class="auto-lfo">Depth <input type="range" id="autoLfoDepth" min="0" max="100" value="30" aria-label="LFO depth"></label><button class="secondary-btn" id="clearAutomation">Clear automation</button><span class="drop-hint" style="display:inline">Values are set at each bar and glide (curve shape) to the next one; an LFO adds movement on top. Targets: track volume, pan, tone, reverb/delay send, filter, drive and the master.</span></div><svg class="auto-chart" id="autoChart" viewBox="0 0 400 64" preserveAspectRatio="none" aria-hidden="true"></svg><div class="automation-points" id="automationPoints"></div></div>
  <div class="mixer-console" id="mixerConsole" role="group" aria-label="Mixer"></div>
 </section>
+<section class="lyrics-panel" id="lyricsPanel" aria-label="Lyrics">
+ <div class="studio-pro-head"><h2>Lyrics</h2><button class="secondary-btn" id="lyAdd">+ Line at playhead</button><button class="secondary-btn" id="lyImport">Import LRC</button><input id="lyFile" type="file" accept=".lrc,.txt,text/plain" hidden><button class="secondary-btn" id="lyExport">Export LRC</button><button class="secondary-btn" id="lyClear">Clear</button><span class="drop-hint" style="display:inline">Lines are timed in bars; the current line lights up during playback and shows in fullscreen / video.</span></div>
+ <div class="ly-now" id="lyNow" aria-hidden="true"></div><ol class="ly-list" id="lyList"></ol>
+</section>
+<section class="vocal-tools" id="vocalTools" aria-label="Vocal tools">
+ <div class="studio-pro-head"><h2>Vocal tools</h2><button class="secondary-btn" id="vocRec" title="Count-in, then record onto a Vocal track while the song plays">● Record vocal take</button><button class="secondary-btn" id="vocChain" aria-pressed="false" title="Low-cut, presence EQ, compressor and reverb on the selected audio track">Vocal chain</button><button class="secondary-btn" id="vocTrim">Trim silence</button><button class="secondary-btn" id="vocNorm">Normalise gain</button><label class="ly-mon"><input type="checkbox" id="vocMon"> Monitor mic (headphones only)</label><button class="secondary-btn" id="midiOutBtn" aria-pressed="false" title="Send notes and clock to an external MIDI device">MIDI out…</button></div>
+</section>
 <section class="studio-pro" id="studioPro" aria-label="Studio tools">
  <div class="studio-pro-head"><h2>Studio tools</h2><button class="secondary-btn" id="undoPro">Undo</button><button class="secondary-btn" id="redoPro">Redo</button><button class="secondary-btn" id="copyClip">Copy clip</button><button class="secondary-btn" id="pasteClip">Paste clip</button><button class="secondary-btn" id="micRecord">● Record mic</button><button class="secondary-btn" id="recSettings" title="Count-in, metronome while recording, input latency">Recording…</button><button class="secondary-btn" id="midiImport">Import MIDI</button><button class="secondary-btn" id="midiExport">Export MIDI</button><input id="midiFile" type="file" accept=".mid,.midi,audio/midi" hidden></div>
  <div class="master-tools"><label><span>Master low EQ <output id="eqLowOut">-2 dB</output></span><input id="eqLow" type="range" min="-12" max="12" step="0.5" value="-2"></label><label><span>Master high EQ <output id="eqHighOut">2.5 dB</output></span><input id="eqHigh" type="range" min="-12" max="12" step="0.5" value="2.5"></label><label><span>Compressor <output id="compressorOut">55%</output></span><input id="compressor" type="range" min="0" max="100" value="55"></label><label><span>Kick ducking <output id="duckOut">55%</output></span><input id="duck" type="range" min="0" max="100" value="55" aria-label="Kick ducking of bass and chords"></label><label><span>Master gain <output id="masterGainProOut">100%</output></span><input id="masterGainPro" type="range" min="0" max="125" value="100"></label></div>
@@ -596,6 +608,7 @@ dialog::backdrop{background:rgba(8,12,14,.55);backdrop-filter:blur(2px)}
   <button class="export-opt" id="exMp3"><b>MP3</b><div><strong>Song · MP3</strong><span>Compressed song render, encoded in your browser (no upload).</span></div></button>
   <button class="export-opt" id="exStems"><b>ZIP</b><div><strong>Stems · one WAV per track</strong><span>Every track rendered separately (before master compression), all the same length, in one .zip.</span></div></button>
   <button class="export-opt" id="exMidi"><b>MID</b><div><strong>MIDI file</strong><span>All tracks (drums on channel 10), tempo and notes of the arrangement.</span></div></button>
+  <button class="export-opt" id="exVideo"><b>WEBM</b><div><strong>Visualizer video</strong><span>Plays the song once and records the visualizer with its audio (real time).</span></div></button>
   <button class="export-opt" id="exFlac"><b>FLAC</b><div><strong>Song · FLAC (lossless)</strong><span>Bit-exact, about half the size of WAV; uses the WAV depth above.</span></div></button>
   <button class="export-opt" id="exShare"><b>SEND</b><div><strong>Share song…</strong><span>Opens your device's share sheet with an MP3 (downloads instead if sharing is unavailable).</span></div></button>
   <button class="export-opt" id="exLink"><b>LINK</b><div><strong>Copy project link</strong><span>The whole arrangement packed into the link itself (no audio files; large projects fall back to a file).</span></div></button>
@@ -603,6 +616,7 @@ dialog::backdrop{background:rgba(8,12,14,.55);backdrop-filter:blur(2px)}
   <button class="export-opt" id="exShareProject"><b>SEND</b><div><strong>Share project file…</strong><span>Send the .json project (with embedded audio) through the share sheet.</span></div></button>
   <button class="export-opt" id="exJson"><b>JSON</b><div><strong>Project file</strong><span>Everything needed to re-open this project later (Import).</span></div></button>
 </div></div></dialog>
+<dialog id="midiOutDlg" aria-labelledby="moTitle"><div class="dlg-head"><h2 id="moTitle">MIDI output</h2><button class="secondary-btn" data-close>Close</button></div><div class="dlg-body"><p class="drop-hint" style="display:block">Send the notes you hear (drums on channel 10) and MIDI clock to a hardware synth or a virtual port. Nothing leaves your device.</p><label for="moSel">Output</label><select id="moSel"><option value="">— none —</option></select><label><input type="checkbox" id="moNotes" checked> Send notes</label><label><input type="checkbox" id="moClock" checked> Send clock + start/stop</label><label for="moLat">Latency offset (ms)</label><input type="number" id="moLat" min="-200" max="500" step="5" value="0"><p class="drop-hint" id="moInfo" style="display:block"></p></div></dialog>
 <dialog id="loopDlg" aria-labelledby="loopTitle"><div class="dlg-head"><h2 id="loopTitle">Loop library</h2><button class="secondary-btn" data-close>Close</button></div><div class="dlg-body"><p class="drop-hint" style="display:block">Loops are synthesised right here in your browser (nothing is downloaded). Each one lands on the timeline at the playhead and follows your project tempo.</p><div class="export-grid" id="loopList"></div></div></dialog>
 <dialog id="askDlg" aria-labelledby="askTitle"><form id="askForm"><div class="dlg-head"><h2 id="askTitle">Confirm</h2></div><div class="dlg-body"><p id="askMsg"></p><input id="askInput" type="text" maxlength="60" autocomplete="off" aria-label="Name" hidden><div class="dlg-actions"><button type="button" class="secondary-btn" id="askCancel">Cancel</button><button type="submit" class="secondary-btn accent" id="askOk">OK</button></div></div></form></dialog>
 <dialog id="libDlg" aria-labelledby="libTitle"><div class="dlg-head"><h2 id="libTitle">Projects</h2><button class="secondary-btn" data-close>Close</button></div><div class="dlg-body"><p class="hint" id="libNote">Projects saved in this browser, newest first. Audio is stored with them.</p><ul class="lib-list" id="libList"></ul><div class="dlg-actions"><button class="secondary-btn accent" id="libSaveNew">Save current as new project…</button></div></div></dialog>
@@ -1269,7 +1283,7 @@ function blankState(){
     patterns:Array.from({length:NPAT},emptyPattern),prog:Array.from({length:MAXBARS},(_,i)=>[0,2,5,3][i%4]),chordType:'seventh',bassFollow:true,
     octs:{bass:2,lead:5,keys:4},rollTrack:BASS,tracks,
     fx:{filter:{on:true,value:88},drive:{on:false,value:24},delay:{on:true,value:20},reverb:{on:true,value:66}},
-    master:{low:0,high:-2.5,comp:40,gain:72,duck:20},audioMode:'stretch',auto:{},autoCfg:{},sel:0};
+    master:{low:0,high:-2.5,comp:40,gain:72,duck:20},audioMode:'stretch',auto:{},autoCfg:{},lyrics:[],sel:0};
 }
 let S=blankState();
 let selectedClip=null,selBar=0,patClipboard=null,clipClipboard=null;
@@ -1312,7 +1326,7 @@ function sanitize(p){
         if(i<NT&&typeof tt.preset==='string'&&Object.prototype.hasOwnProperty.call(PRESETS[tr.kind],tt.preset))tr.preset=tt.preset;
         tr.name=String(tt.name==null?tr.name:tt.name).slice(0,40)||tr.name;
         ['volume','pan','tone','punch','space','decay','tune','tfilter','tdelay','tdrive'].forEach(k=>{tr[k]=N(tt[k],0,100,tr[k])});
-        tr.muted=tt.muted===true;tr.solo=tt.solo===true;if(i>=NT&&typeof tt.color==='string'&&/^#[0-9a-f]{6}$/i.test(tt.color))tr.color=tt.color;
+        tr.muted=tt.muted===true;tr.solo=tt.solo===true;if(i>=NT&&tt.vocal===true)tr.vocal=true;if(i>=NT&&typeof tt.color==='string'&&/^#[0-9a-f]{6}$/i.test(tt.color))tr.color=tt.color;
         if(i<NT&&tt.sample&&typeof tt.sample==='object'){const sid=safeId(tt.sample.assetId);if(sid)tr.sample={assetId:sid,name:String(tt.sample.name||'Sample').slice(0,60),root:Math.round(N(tt.sample.root,0,127,60)),loop:tt.sample.loop===true,gain:N(tt.sample.gain,0,150,100)}}
         tr.clips=(Array.isArray(tt.clips)?tt.clips:[]).filter(c=>c&&typeof c==='object'&&(c.type==='pattern'||c.type==='audio')).slice(0,400).map(c=>{
           let id=safeId(c.id);if(!id||ids.has(id))id=uid();ids.add(id);const au=c.type==='audio';
@@ -1330,6 +1344,7 @@ function sanitize(p){
       if(c&&typeof c==='object'){const sh=['linear','ease','out','smooth','step'].includes(c.shape)?c.shape:'linear',l=c.lfo&&typeof c.lfo==='object'?c.lfo:null,
         lf=l&&N(l.depth,0,100,0)>0?{shape:['sine','tri','square','saw','rand'].includes(l.shape)?l.shape:'sine',rate:N(l.rate,.125,16,1),depth:N(l.depth,0,100,0)}:null;
         if(sh!=='linear'||lf)o.autoCfg[ti+':'+m[2]]={shape:sh,lfo:lf}}});
+    if(Array.isArray(p.lyrics))o.lyrics=p.lyrics.slice(0,200).filter(l=>l&&typeof l==='object'&&typeof l.text==='string').map(l=>({t:N(l.t,0,MAXBARS,0),text:l.text.replace(/[\u0000-\u001f]/g,' ').slice(0,200)})).sort((a,b)=>a.t-b.t);
     if(p.audioMode==='speed'||p.audioMode==='stretch')o.audioMode=p.audioMode;
     if(p.kitApplied===true)o.kitApplied=true;
     return o;
@@ -1513,27 +1528,33 @@ function duckOnKick(E,t,vel){
     const g=st.duck.gain,fl=clamp(1-dep*w*.78*v,.12,1);g.setTargetAtTime(fl,t,.006);g.setTargetAtTime(1,t+.04,rel/3)}
 }
 function ensureStrips(E){
-  while(E.strips.length<S.tracks.length)E.strips.push(makeStrip(E));
+  while(E.strips.length<S.tracks.length)E.strips.push(makeStrip(E,S.tracks[E.strips.length]));
   while(E.strips.length>S.tracks.length){const s=E.strips.pop();disposeStrip(s)}
   S.tracks.forEach((_,i)=>applyStrip(E,i,true));
 }
-function makeStrip(E){
+function makeStrip(E,ts){
   const c=E.ctx,s={};s.in=c.createGain();s.hp=c.createBiquadFilter();s.hp.type='highpass';s.hp.Q.value=.62;s.hp.frequency.value=30;s.duck=c.createGain();s.autoV=c.createGain();s.vol=c.createGain();s.sAuto=c.createGain();s.send=c.createGain();
   /* per-track FX: drive (parallel saturator) -> low-pass filter -> ... -> delay send / reverb send */
   s.dryG=c.createGain();s.pre=c.createGain();s.sh=c.createWaveShaper();s.sh.curve=E.tanh;s.post=c.createGain();s.wetG=c.createGain();s.mix=c.createGain();
   s.tf=c.createBiquadFilter();s.tf.type='lowpass';s.tf.Q.value=.7;s.tf.frequency.value=20000;s.dSend=c.createGain();s.dSend.gain.value=0;
   s.pan=c.createStereoPanner?c.createStereoPanner():c.createGain();
-  s.in.connect(s.hp);s.hp.connect(s.dryG);s.dryG.connect(s.mix);s.hp.connect(s.pre);s.pre.connect(s.sh);s.sh.connect(s.post);s.post.connect(s.wetG);s.wetG.connect(s.mix);
+  if(ts&&ts.kind==='audio'){ /* vocal chain (neutral unless the track is flagged as vocal): presence EQ + compressor */
+    s.vEq=c.createBiquadFilter();s.vEq.type='peaking';s.vEq.frequency.value=3200;s.vEq.Q.value=.8;s.vEq.gain.value=0;
+    s.vComp=c.createDynamicsCompressor();s.vComp.threshold.value=0;s.vComp.ratio.value=1;s.vComp.knee.value=12;s.vComp.attack.value=.006;s.vComp.release.value=.18;
+    s.in.connect(s.vEq);s.vEq.connect(s.vComp);s.vComp.connect(s.hp);
+  }else s.in.connect(s.hp);
+  s.hp.connect(s.dryG);s.dryG.connect(s.mix);s.hp.connect(s.pre);s.pre.connect(s.sh);s.sh.connect(s.post);s.post.connect(s.wetG);s.wetG.connect(s.mix);
   s.mix.connect(s.tf);s.tf.connect(s.autoV);s.autoV.connect(s.duck);s.duck.connect(s.vol);s.vol.connect(s.pan);s.pan.connect(E.master);s.pan.connect(s.sAuto);s.sAuto.connect(s.send);s.send.connect(E.rvIn);s.pan.connect(s.dSend);s.dSend.connect(E.dBus);
   if(E.live){s.an=c.createAnalyser();s.an.fftSize=128;s.pan.connect(s.an);s.buf=new Float32Array(128)}
   return s;
 }
-function disposeStrip(s){['in','hp','dryG','pre','sh','post','wetG','mix','tf','dSend','autoV','duck','vol','pan','sAuto','send','an'].forEach(k=>{try{s[k]&&s[k].disconnect()}catch(e){}})}
+function disposeStrip(s){['in','vEq','vComp','hp','dryG','pre','sh','post','wetG','mix','tf','dSend','autoV','duck','vol','pan','sAuto','send','an'].forEach(k=>{try{s[k]&&s[k].disconnect()}catch(e){}})}
 function applyStrip(E,ti,imm){
   const s=E.strips[ti],ts=S.tracks[ti];if(!s||!ts)return;
   const t=E.ctx.currentTime,set=(p,v)=>{if(imm)p.value=v;else p.setTargetAtTime(v,t,.015)};
   const av=S.auto[ti+':volume'],ap=S.auto[ti+':pan'],as=S.auto[ti+':space'];
-  set(s.hp.frequency,HP_FREQ[ts.kind]||40);
+  set(s.hp.frequency,ts.vocal?95:(HP_FREQ[ts.kind]||40));
+  if(s.vEq){const v=!!ts.vocal;set(s.vEq.gain,v?3.5:0);set(s.vComp.threshold,v?-24:0);set(s.vComp.ratio,v?3.5:1)}
   set(s.vol.gain,allowedE(E,ti)?(av?1:volCurve(ts.volume)):0);
   const tf=ts.tfilter==null?100:ts.tfilter,td=(ts.tdrive||0)/100;
   const run=E.live&&T.playing,aF=run&&S.auto[ti+':filter'],aD=run&&S.auto[ti+':delay'],aR=run&&S.auto[ti+':drive'];
@@ -1542,7 +1563,7 @@ function applyStrip(E,ti,imm){
   if(!aD)set(s.dSend.gain,spaceCurve(ts.tdelay||0)*.9);
   if(!T.playing||!av)set(s.autoV.gain,av?volCurve(av[0]):1);
   if(s.pan.pan&&(!T.playing||!ap))set(s.pan.pan,((ap?ap[0]:ts.pan)-50)/50);
-  set(s.send.gain,as?1:spaceCurve(ts.space));
+  set(s.send.gain,as?1:spaceCurve(ts.vocal?Math.max(ts.space,26):ts.space));
   if(!T.playing||!as)set(s.sAuto.gain,as?spaceCurve(as[0]):1);
 }
 function applyAllStrips(imm){if(live)S.tracks.forEach((_,i)=>applyStrip(live,i,imm))}
@@ -1550,7 +1571,7 @@ function killVoices(E){
   if(!E)return;const c=E.ctx,now=c.currentTime;
   E.strips.forEach((s,i)=>{
     const old=s.in;old.gain.cancelScheduledValues(now);old.gain.setTargetAtTime(0,now,.008);
-    const n=c.createGain();n.connect(s.hp);s.in=n;s.duck.gain.cancelScheduledValues(now);s.duck.gain.setValueAtTime(1,now);setTimeout(()=>{try{old.disconnect()}catch(e){}},500);
+    const n=c.createGain();n.connect(s.vEq||s.hp);s.in=n;s.duck.gain.cancelScheduledValues(now);s.duck.gain.setValueAtTime(1,now);setTimeout(()=>{try{old.disconnect()}catch(e){}},500);
     [s.autoV.gain,s.sAuto.gain,s.tf.frequency,s.dSend.gain,s.dryG.gain,s.wetG.gain,s.pre.gain,s.post.gain].forEach(p=>p.cancelScheduledValues(now));if(s.pan.pan)s.pan.pan.cancelScheduledValues(now);
   });
   E.srcs.forEach(src=>{try{src.stop(now+.02)}catch(e){}});E.srcs.clear();E.lastOpen=null;
@@ -1846,9 +1867,11 @@ function scheduleStep(E,I){
         const d=(e.deg==null?0:e.deg)+(tKind(ti)==='bass'&&S.bassFollow?chordShift(barChord(e.barIdx)):0);
         x.midis=[midiOfDeg(d,S.octs[octKey(ti)])];x.gate=Math.max(.04,e.len*sd/r*.93);
       }else if(isChordT(ti)){x.midis=chordMidis(barChord(e.barIdx));x.gate=Math.max(.05,e.len*sd*.96)}
+      if(I.live&&MO.out&&allowedE(E,ti))midiOutNote(E,ti,t,v,x);
       trigger(E,ti,t,v,x);
     }
   }
+  if(I.live)midiOutClock(E,time,sd,I.first);
   if(I.mode==='song'){
     for(let ti=NT;ti<S.tracks.length;ti++){
       if(!allowedE(E,ti))continue;
@@ -1951,6 +1974,7 @@ function pause(kill){
   T.q.length=0;$('#app').classList.remove('playing');setPlayUI();setStatus('Paused');
 }
 function stopTransport(){
+  if(typeof midiOutStop==='function')midiOutStop();
   if(typeof lnOnStop==="function")lnOnStop();
   const was=T.playing;T.prep++;T.preparing=false;T.playing=false;T.paused=false;T.ending=false;T.countEnd=0;stopTimer();if(live)killVoices(live);
   T.pos=0;T.barCount=0;T.q.length=0;T.ui={g:0,t:0,valid:false};
@@ -2346,7 +2370,7 @@ function noteOff(id){
   h.hs.forEach(x=>x&&x.rel(t));const el=$$('#keys .key')[h.i];if(el&&![...held.values()].some(v=>v.i===h.i))el.classList.remove('pressed');
 }
 function releaseAllKeys(){[...held.keys()].forEach(noteOff)}
-let recordOn=false;const PREF={countIn:0,metroRec:true,latMs:0,micPlay:false}; /* recording preferences (kept in localStorage, not in the project) */
+let recordOn=false;const PREF={countIn:0,metroRec:true,latMs:0,micPlay:false,monitor:false,midiOut:'',moNotes:true,moClock:true,moLat:0}; /* recording preferences (kept in localStorage, not in the project) */
 function midiToDeg(m,oct){let best=0,bd=1e9;const n=scaleOf().iv.length;for(let d=-n;d<=3*n;d++){const x=Math.abs(midiOfDeg(d,oct)-m);if(x<bd){bd=x;best=d}}return best}
 function recordNote(m,ti,vel){
   const tr=ti==null?S.rollTrack:ti,v=vel==null?defaultVel:clamp(vel,.08,1);let g,pi=S.cur;
@@ -3303,7 +3327,8 @@ function importMidiBytes(bytes){
 const V={mode:0,cv:null,cx:null,w:0,h:0,dpr:1,colors:{},fdata:null,tdata:null,frame:0,draws:0,stale:true,until:0,wasAnim:false};
 function readColors(){V.stale=true;const cs=getComputedStyle(document.documentElement);['--viz-bg','--accent','--accent-2','--muted','--line','--green','--ink'].forEach(k=>V.colors[k]=cs.getPropertyValue(k).trim())}
 function sizeViz(){const cv=V.cv;V.dpr=Math.min(2,window.devicePixelRatio||1);const r=cv.getBoundingClientRect();V.w=Math.max(10,Math.round(r.width));V.h=Math.max(10,Math.round(r.height));cv.width=V.w*V.dpr;cv.height=V.h*V.dpr;V.cx.setTransform(V.dpr,0,0,V.dpr,0,0);V.stale=true;wakeFrame()}
-function drawViz(){
+function drawViz(){drawViz0();if(typeof vizOverlay==='function')vizOverlay()}
+function drawViz0(){
   V.draws++;const c=V.cx,w=V.w,h=V.h,E=live;c.fillStyle=V.colors['--viz-bg'];c.fillRect(0,0,w,h);
   const active=E&&E.ctx.state==='running';
   if(active){if(!V.fdata||V.fdata.length!==E.an.frequencyBinCount){V.fdata=new Uint8Array(E.an.frequencyBinCount);V.tdata=new Uint8Array(E.an.fftSize)}E.an.getByteFrequencyData(V.fdata);E.an.getByteTimeDomainData(V.tdata)}
@@ -3366,7 +3391,7 @@ function frame(){
     const ui=T.ui;
     if(T.playing&&ui.valid){
       if(ui.g!==UI.lastG){
-        UI.lastG=ui.g;const local=ui.g%SPB;setCurrentCol(local);if(typeof frPlayhead==='function')frPlayhead(local);
+        UI.lastG=ui.g;const local=ui.g%SPB;setCurrentCol(local);if(typeof frPlayhead==='function')frPlayhead(local);if(typeof lyricsTick==='function')lyricsTick();
         renderBarPlayhead(S.mode==='song'?Math.floor(ui.g/SPB):-1);
         $('#timecode').textContent=fmtPos(S.mode==='song'?ui.g:(ui.bar!=null?ui.bar*SPB+(ui.g%SPB):ui.g));
       }
@@ -3394,7 +3419,7 @@ const SHORTCUTS=[
   ['Tap tempo','T'],['Metronome','M'],['Loop on/off','L'],['Record armed on/off','R'],['Tempo −/+ 1 (Shift: 5)','[ ]'],
   ['Copy / paste / duplicate clip','Ctrl/Cmd + C / V / D'],['Delete selected clip','Delete'],['Save / Save as…','Ctrl/Cmd + S / Shift + S'],['Move a timeline clip (focus it first)','← → one bar · ↑ ↓ other track'],['Resize a timeline clip','Shift + ← → (Alt + Shift + ← → trims the start)'],['Piano roll: move / toggle / length','Arrow keys · Enter or Space · Shift + ← →'],['Step: toggle','Enter / Space on a step'],
   ['Step: move focus','Arrow keys · Home / End · one Tab stop per grid'],['Step: velocity','Shift + ↑ / ↓'],['Step: probability, ratchet, length','Right-click, long-press, or Menu key'],
-  ['MIDI keyboard','Connect MIDI under Playable keys · velocity, sustain pedal, pitch bend, mod wheel, ch. 10 = drums'],['Knobs','Drag, scroll, arrows · double-click resets'],['Show this help','?']
+  ['MIDI keyboard','Connect MIDI under Playable keys · velocity, sustain pedal, pitch bend, mod wheel, ch. 10 = drums'],['Knobs','Drag, scroll, arrows · double-click resets'],['Free-pitch piano roll (canvas)','Arrows move · Enter adds/removes · Shift+←→ length · Shift+↑↓ velocity · Alt+arrows move note · PgUp/PgDn octave · Delete'],['Show this help','?']
 ];
 function isTyping(t){return t&&(t.isContentEditable||t.tagName==='TEXTAREA'||t.tagName==='SELECT'||(t.tagName==='INPUT'&&!['range','checkbox','button','file'].includes(t.type)))}
 function onKeyDown(e){
@@ -3435,7 +3460,7 @@ function onKeyDown(e){
 }
 function onKeyUp(e){wakeFrame();const up=e.key.toUpperCase();if(held.has('k'+up))noteOff('k'+up)}
 function openHelp(){
-  const b=$('#helpBody');b.innerHTML='<ul class="keys-list">'+SHORTCUTS.map(([a,k])=>'<li><span>'+esc(a)+'</span><span><kbd>'+esc(k)+'</kbd></span></li>').join('')+'</ul><h3>Tips</h3><p style="font-size:12.5px;line-height:1.55;margin:0">Drag across steps to paint. Drag a lit step up/down to change its velocity. Right-click a step for probability (chance to play), ratchet (rolls) and length. Pick a <b>genre</b> and hit <b>Whole song</b> for an instant arrangement, then use <b>Evolve</b> to vary it. Click the visualizer to switch between spectrum, waveform and both.</p>';
+  const b=$('#helpBody');b.innerHTML='<ul class="keys-list">'+SHORTCUTS.map(([a,k])=>'<li><span>'+esc(a)+'</span><span><kbd>'+esc(k)+'</kbd></span></li>').join('')+'</ul><h3>Tips</h3><p style="font-size:12.5px;line-height:1.55;margin:0">Drag across steps to paint. Drag a lit step up/down to change its velocity. Right-click a step for probability (chance to play), ratchet (rolls) and length. Pick a <b>genre</b> and hit <b>Whole song</b> for an instant arrangement, then use <b>Evolve</b> to vary it. Click the visualizer to switch between spectrum, waveform and both.</p><h3>What else is in here</h3><ul style="font-size:12.5px;line-height:1.55;margin:4px 0 0 18px;padding:0"><li><b>Audio clips</b>: source BPM + automatic tempo/key detection (own algorithm, runs in a worker), gain, fades, reverse, pitch shift, slice at transients, built-in loop library.</li><li><b>Free-pitch piano roll</b>, 8 patterns A–H, extra Lead 2 / Keys 2 / Pad tracks, 1/16 · 1/32 · triplet grids, tempo 30–300 BPM.</li><li><b>Clip launcher</b> (bar-quantised) with performance recording; <b>automation</b> with curves, LFO and master targets.</li><li><b>Lyrics</b> with LRC import/export, <b>vocal tools</b> (count-in take, vocal chain, trim, normalise), <b>MIDI out</b> (notes + clock).</li><li><b>Export</b>: WAV, MP3, FLAC, stems, MIDI, project file/link, standalone player, WebM video. Same project seed ⇒ exports sound exactly like playback.</li></ul>';
   const d=$('#helpDlg');if(!d.open)d.showModal();
 }
 function setPattern(i){S.cur=i;renderSeq();renderRoll();markDirty()}
@@ -4258,12 +4283,194 @@ function wireShare(){
   window.addEventListener('hashchange',()=>{loadFromHash()});
   loadFromHash();
 }
+/* ===== Milestone B7-B10: visualizer fullscreen + WebM video, lyrics + LRC, vocal tools, MIDI output ===== */
+/* ---- visualizer: fullscreen + overlay + video (canvas + master audio -> MediaRecorder WebM) ---- */
+function vizFullscreen(){
+  const el=$('#vizBox');if(document.fullscreenElement){document.exitFullscreen();return}
+  const f=el.requestFullscreen||el.webkitRequestFullscreen;if(!f){toast('Fullscreen is not supported in this browser');return}
+  Promise.resolve(f.call(el)).catch(()=>toast('Fullscreen was blocked'));
+}
+function vizOverlay(){
+  if(!(document.fullscreenElement||VID.rec))return;
+  const c=V.cx,w=V.w,h=V.h;c.save();c.textBaseline='bottom';c.fillStyle='rgba(255,255,255,.85)';c.shadowColor='rgba(0,0,0,.6)';c.shadowBlur=6;
+  c.font='600 '+Math.max(11,Math.round(h*.045))+'px Manrope,sans-serif';c.fillText(S.name+' · '+S.bpm+' BPM',14,h-12);
+  const ln=lyricAt(currentBars());if(ln){c.textAlign='center';c.font='700 '+Math.max(14,Math.round(h*.075))+'px Manrope,sans-serif';c.fillText(ln.text,w/2,h*.5)}
+  c.restore();
+}
+const VID={rec:null,chunks:[],prevLoop:true,timer:0};
+function vidUI(on){const b=$('#vizRec');if(b){b.setAttribute('aria-pressed',on);b.textContent=on?'■ Stop video':'● Record video'}}
+async function toggleVideo(){
+  if(VID.rec){stopVideo();return}
+  if(typeof MediaRecorder==='undefined'||!V.cv.captureStream){toast('Video recording is not supported in this browser');return}
+  const E=ensureAudio();if(!E)return;
+  try{
+    if(!E.vidDest){E.vidDest=E.ctx.createMediaStreamDestination();E.lim.connect(E.vidDest)}
+    await E.ctx.resume();
+    const vs=V.cv.captureStream(30),mix=new MediaStream([...vs.getVideoTracks(),...E.vidDest.stream.getAudioTracks()]);
+    const mt=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'].find(m=>MediaRecorder.isTypeSupported(m));
+    const rec=new MediaRecorder(mix,mt?{mimeType:mt,videoBitsPerSecond:4e6,audioBitsPerSecond:192e3}:{});
+    VID.rec=rec;VID.chunks=[];VID.prevLoop=loopOn;
+    rec.ondataavailable=e=>{if(e.data&&e.data.size)VID.chunks.push(e.data)};
+    rec.onstop=()=>{
+      clearInterval(VID.timer);loopOn=VID.prevLoop;const blob=new Blob(VID.chunks,{type:'video/webm'});VID.rec=null;VID.chunks=[];vidUI(false);V.stale=true;
+      if(blob.size){download(blob,safeName()+'.webm');toast('Video saved · '+(blob.size/1e6).toFixed(1)+' MB (WebM, visualizer + audio)',3600)}else toast('Nothing was recorded');
+      VID.last=blob.size;
+    };
+    stopTransport();loopOn=false;rec.start(500);vidUI(true);toast('Recording the visualizer with audio — it stops when the song ends',2800);
+    play();wakeFrame();
+    VID.timer=setInterval(()=>{if(!T.playing&&!T.preparing&&VID.rec){clearInterval(VID.timer);setTimeout(stopVideo,900)}},250);
+  }catch(e){console.warn(e);loopOn=VID.prevLoop;VID.rec=null;vidUI(false);toast('Could not start video recording')}
+}
+function stopVideo(){const r=VID.rec;if(!r)return;clearInterval(VID.timer);if(T.playing||T.preparing)stopTransport();try{if(r.state!=='inactive')r.stop();else r.onstop()}catch(e){}}
+/* ---- lyrics: timed lines (bar positions), highlight during playback, LRC import / export ---- */
+const currentBars=()=>S.mode==='song'&&T.playing&&T.ui&&T.ui.valid?T.ui.g/SPB:-1;
+function lyricAt(b){if(b<0||!S.lyrics)return null;let r=null;for(const l of S.lyrics){if(l.t<=b+1e-6)r=l;else break}return r}
+function lrcStamp(sec){const m=Math.floor(sec/60),s=sec-m*60;return '['+String(m).padStart(2,'0')+':'+s.toFixed(2).padStart(5,'0')+']'}
+function lyricsToLrc(){
+  const bd=barDurSec(),out=['[ti:'+S.name+']','[ar:Music Making App]','[length:'+lrcStamp(S.songBars*bd).slice(1,-1)+']','[re:Music Making App]'];
+  (S.lyrics||[]).forEach(l=>out.push(lrcStamp(l.t*bd)+l.text));return out.join('\n')+'\n';
+}
+function parseLrc(text,bd){
+  const out=[];
+  String(text).split(/\r?\n/).slice(0,2000).forEach(line=>{
+    const stamps=[...line.matchAll(/\[(\d{1,3}):(\d{1,2}(?:\.\d{1,3})?)\]/g)];if(!stamps.length)return;
+    const txt=line.replace(/\[[^\]]*\]/g,'').trim().slice(0,200);
+    stamps.forEach(m=>{const sec=(+m[1])*60+(+m[2]);out.push({t:clamp(Math.round(sec/bd*64)/64,0,MAXBARS-.01),text:txt})});
+  });
+  return out.sort((a,b)=>a.t-b.t).slice(0,200);
+}
+function sortLyrics(){S.lyrics.sort((a,b)=>a.t-b.t)}
+function renderLyrics(){
+  const ol=$('#lyList');if(!ol)return;const L2=S.lyrics||[];ol.innerHTML='';
+  L2.forEach((l,i)=>{
+    const li=document.createElement('li');li.dataset.i=i;
+    li.innerHTML='<input class="ly-t" type="number" min="1" max="'+(MAXBARS+1)+'" step="0.25" value="'+(Math.round((l.t+1)*100)/100)+'" aria-label="Line '+(i+1)+' starts at bar"><input class="ly-x" type="text" maxlength="200" value="'+esc(l.text)+'" aria-label="Line '+(i+1)+' text"><button class="secondary-btn ly-stamp" title="Set this line to the playhead position">Stamp</button><button class="secondary-btn ly-del" aria-label="Delete line '+(i+1)+'">✕</button>';
+    ol.appendChild(li);
+  });
+  $('#lyExport').disabled=!L2.length;lyricsTick(true);
+}
+let lyIdx=-2;
+function lyricsTick(force){
+  const b=currentBars(),l=lyricAt(b),idx=l?S.lyrics.indexOf(l):-1;
+  if(!force&&idx===lyIdx)return;lyIdx=idx;
+  $$('#lyList li').forEach((li,i)=>li.classList.toggle('now',i===idx));
+  const n=$('#lyNow');if(n)n.textContent=l?l.text:(b<0?'':'♪');
+}
+function wireLyrics(){
+  const ol=$('#lyList');if(!ol)return;renderLyrics();
+  $('#lyAdd').onclick=()=>{if(S.lyrics.length>=200)return toast('Up to 200 lyric lines');checkpoint();const t=Math.max(0,Math.round(playBars()*4)/4);S.lyrics.push({t,text:''});sortLyrics();markDirty();renderLyrics();const i=S.lyrics.findIndex(l=>l.t===t&&l.text==='');const inp=$('#lyList li:nth-child('+(i+1)+') .ly-x');if(inp)inp.focus()};
+  ol.addEventListener('change',e=>{
+    const li=e.target.closest('li');if(!li)return;const l=S.lyrics[+li.dataset.i];if(!l)return;checkpoint();
+    if(e.target.classList.contains('ly-t'))l.t=clamp((+e.target.value||1)-1,0,MAXBARS-.01);else if(e.target.classList.contains('ly-x'))l.text=e.target.value.slice(0,200);
+    sortLyrics();markDirty();renderLyrics();
+  });
+  ol.addEventListener('click',e=>{
+    const li=e.target.closest('li');if(!li)return;const i=+li.dataset.i;
+    if(e.target.classList.contains('ly-del')){checkpoint();S.lyrics.splice(i,1);markDirty();renderLyrics()}
+    else if(e.target.classList.contains('ly-stamp')){checkpoint();S.lyrics[i].t=clamp(Math.round((T.playing?currentBars():playBars())*16)/16,0,MAXBARS-.01);sortLyrics();markDirty();renderLyrics();announce('Line stamped at bar '+(S.lyrics[i]?Math.round((S.lyrics[i].t+1)*100)/100:''))}
+  });
+  $('#lyExport').onclick=()=>{download(new Blob([lyricsToLrc()],{type:'text/plain;charset=utf-8'}),safeName()+'.lrc');toast('LRC lyrics downloaded')};
+  $('#lyImport').onclick=()=>$('#lyFile').click();
+  $('#lyFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;if(f.size>400000)return toast('That lyrics file is too large');
+    const lines=parseLrc(await f.text(),barDurSec());if(!lines.length)return toast('No timed lines found (expected [mm:ss.xx] text)');checkpoint();S.lyrics=lines;markDirty();renderLyrics();toast(lines.length+' lyric lines imported')};
+  $('#lyClear').onclick=()=>{if(!S.lyrics.length)return;checkpoint();S.lyrics=[];markDirty();renderLyrics()};
+  $('#vizFull').onclick=vizFullscreen;$('#vizRec').onclick=toggleVideo;
+  document.addEventListener('fullscreenchange',()=>{setTimeout(()=>{sizeViz();V.stale=true;wakeFrame()},80)});
+  const eb=$('#exVideo');if(eb)eb.onclick=()=>{$('#exportDlg').close();toggleVideo()};
+}
+/* ---- vocal tools ---- */
+function vocalTrackIndex(){return S.tracks.findIndex((t,i)=>i>=NT&&t.kind==='audio'&&t.vocal)}
+async function startVocalTake(){
+  if(MIC.rec){toggleMic();return}
+  let ti=vocalTrackIndex();
+  if(ti<0){
+    if(S.tracks.length-NT>=MAX_AUDIO_TRACKS)return toast('No room for another audio track');
+    checkpoint();const t=audioTrack(S.tracks.length-NT+1);t.name='Vocal';t.vocal=true;S.tracks.push(t);ti=S.tracks.length-1;if(live)ensureStrips(live);markDirty();renderDAW();renderArr();
+  }
+  MIC.vocal=true;MIC.ti=ti;
+  if(S.mode!=='song'&&S.tracks.some(t=>t.clips.length))setMode('song');
+  toast('Vocal take: '+Math.max(PREF.countIn,1)+'-bar count-in, headphones recommended (monitoring is '+(PREF.monitor?'on':'off')+')',3600);
+  await toggleMic();
+}
+function vocalToggleChain(){
+  const h=selAudio(),ti=h?h.ti:vocalTrackIndex();if(ti<0)return toast('Select an audio clip (or record a vocal take) first');
+  checkpoint();const t=S.tracks[ti];t.vocal=!t.vocal;if(live)applyStrip(live,ti);markDirty();renderDAW();vocalUI();toast(t.vocal?'Vocal chain on: low-cut, presence EQ, compressor, reverb for “'+t.name+'”':'Vocal chain off for “'+t.name+'”')
+}
+function vocalUI(){const h=selAudio(),ti=h?h.ti:vocalTrackIndex(),on=ti>=0&&S.tracks[ti]&&S.tracks[ti].vocal;const b=$('#vocChain');if(b)b.setAttribute('aria-pressed',!!on)}
+function clipPeakInfo(c){
+  const a=assets[c.assetId];if(!a||!a.buffer)return null;const b=a.buffer,sr=b.sampleRate,d=b.getChannelData(0),n=b.length;let pk=0;
+  for(let ch=0;ch<b.numberOfChannels;ch++){const x=b.getChannelData(ch);for(let i=0;i<n;i+=3)pk=Math.max(pk,Math.abs(x[i]))}
+  return{b,sr,d,n,pk};
+}
+function vocalTrim(){
+  const h=selAudio();if(!h)return toast('Select an audio clip first');const c=h.clip,p=clipPeakInfo(c);if(!p||p.pk<.001)return toast('That clip is silent');
+  const thr=p.pk*.04,sr=p.sr,from=Math.floor((c.offset||0)*sr),bs=srcBarSec(c),to=Math.min(p.n,from+Math.floor(c.len*bs*sr));
+  let s=from,e=to-1;const ch0=p.b.getChannelData(0),ch1=p.b.getChannelData(p.b.numberOfChannels-1);
+  const at=i=>Math.max(Math.abs(ch0[i]),Math.abs(ch1[i]));
+  while(s<e&&at(s)<thr)s++;while(e>s&&at(e)<thr)e--;
+  s=Math.max(from,s-Math.floor(sr*.03));e=Math.min(to-1,e+Math.floor(sr*.15));
+  if(e-s<sr*.05)return toast('Nothing to trim');if(s-from<sr*.02&&to-1-e<sr*.02)return toast('Already tight — no silence at the ends');
+  checkpoint();const dOff=(s-from)/sr;c.start=Math.round((c.start+dOff/bs)*1000)/1000;c.offset=Math.round(s/sr*1000)/1000;c.len=Math.max(.03125,Math.round((e-s)/sr/bs*1000)/1000);c.fadeIn=Math.max(c.fadeIn||0,.01);c.fadeOut=Math.max(c.fadeOut||0,.03);
+  markDirty();renderDAW();renderArr();renderClipTools();toast('Trimmed silence from the ends of the take');
+}
+function vocalNormalize(){
+  const h=selAudio();if(!h)return toast('Select an audio clip first');const p=clipPeakInfo(h.clip);if(!p||p.pk<.001)return toast('That clip is silent');
+  checkpoint();h.clip.gain=Math.round(clamp(.89/p.pk,.1,2)*100)/100;markDirty();renderDAW();renderClipTools();toast('Gain set to '+Math.round(h.clip.gain*100)+'% (peak −1 dB)');
+}
+/* ---- MIDI output (Web MIDI): notes + clock ---- */
+const MO={access:null,out:null,notes:true,clock:true,latMs:0,sent:0,started:false};
+const MO_DRUM=[36,38,39,42,46,37]; /* GM kit: kick, snare, clap, closed hat, open hat, rim */
+function moChannel(ti){return ti<BASS?9:(ti-BASS)%9} /* drums on channel 10, melodic tracks on channels 1-6 */
+function moSend(msg,tsMs){if(!MO.out)return;try{MO.out.send(msg,tsMs);MO.sent++}catch(e){}}
+function moTime(E,t){return performance.now()+(t-E.ctx.currentTime)*1000+MO.latMs}
+function midiOutNote(E,ti,t,vel,x){
+  if(!MO.out||!MO.notes)return;const ts=moTime(E,t),v=clamp(Math.round(vel*100),1,127),ch=moChannel(ti);
+  const notes=ti<BASS?[MO_DRUM[ti]||36]:(x.midis||[]),dur=(x.gate||.1)*1000;
+  notes.forEach(n=>{if(n<0||n>127)return;moSend([0x90|ch,n,v],ts);moSend([0x80|ch,n,0],ts+Math.max(30,dur))});
+}
+function midiOutClock(E,time,sd,first){
+  if(!MO.out||!MO.clock)return;const n=Math.round(6/STEP_MUL);
+  if(first&&!MO.started){MO.started=true;moSend([0xFA],moTime(E,time))}
+  for(let p=0;p<n;p++)moSend([0xF8],moTime(E,time+sd*p/n));
+}
+function midiOutStop(){if(MO.out&&MO.started)moSend([0xFC]);MO.started=false;if(MO.out&&MO.notes){for(let ch=0;ch<16;ch++)moSend([0xB0|ch,123,0])}}
+async function midiOutConnect(){
+  if(!navigator.requestMIDIAccess){toast('Web MIDI is not supported in this browser');return false}
+  try{MO.access=MO.access||await navigator.requestMIDIAccess({sysex:false})}catch(e){toast('MIDI access was denied');return false}
+  MO.access.onstatechange=()=>midiOutList();midiOutList();return true;
+}
+function midiOutList(){
+  const sel=$('#moSel');if(!sel||!MO.access)return;const outs=[...MO.access.outputs.values()];
+  sel.innerHTML='<option value="">— none —</option>'+outs.map(o=>'<option value="'+esc(o.id)+'">'+esc(o.name||o.id)+'</option>').join('');
+  const want=PREF.midiOut||'';sel.value=outs.some(o=>o.id===want)?want:'';midiOutPick(sel.value,true);
+  $('#moInfo').textContent=outs.length?outs.length+' MIDI output'+(outs.length>1?'s':'')+' found':'No MIDI outputs found — connect a device or start a virtual MIDI port';
+}
+function midiOutPick(id,quiet){
+  MO.out=MO.access&&id?MO.access.outputs.get(id)||null:null;if(!quiet){PREF.midiOut=id;savePrefs()}
+  const b=$('#midiOutBtn');if(b){b.setAttribute('aria-pressed',!!MO.out);b.textContent=MO.out?'MIDI out: '+(MO.out.name||'on'):'MIDI out…'}
+}
+function wireMidiOut(){
+  const b=$('#midiOutBtn');if(!b)return;
+  b.onclick=async()=>{$('#moNotes').checked=MO.notes;$('#moClock').checked=MO.clock;$('#moLat').value=MO.latMs;$('#midiOutDlg').showModal();await midiOutConnect()};
+  $('#moSel').onchange=e=>midiOutPick(e.target.value);
+  $('#moNotes').onchange=e=>{MO.notes=e.target.checked;PREF.moNotes=MO.notes;savePrefs()};
+  $('#moClock').onchange=e=>{MO.clock=e.target.checked;PREF.moClock=MO.clock;savePrefs()};
+  $('#moLat').onchange=e=>{MO.latMs=clamp(Math.round(+e.target.value||0),-200,500);e.target.value=MO.latMs;PREF.moLat=MO.latMs;savePrefs()};
+  MO.notes=PREF.moNotes!==false;MO.clock=PREF.moClock!==false;MO.latMs=PREF.moLat||0;
+  if(PREF.midiOut&&navigator.requestMIDIAccess&&navigator.permissions&&navigator.permissions.query){navigator.permissions.query({name:'midi'}).then(r=>{if(r.state==='granted')midiOutConnect()}).catch(()=>{})}
+}
+function wireMedia(){
+  wireLyrics();wireMidiOut();
+  const on=(id,fn)=>{const e=$(id);if(e)e.onclick=fn};
+  on('#vocRec',startVocalTake);on('#vocChain',vocalToggleChain);on('#vocTrim',vocalTrim);on('#vocNorm',vocalNormalize);
+  const m=$('#vocMon');if(m){m.checked=!!PREF.monitor;m.onchange=e=>{PREF.monitor=e.target.checked;savePrefs()}}
+}
 /* wires every Milestone B control (called once from init) and exposes test hooks */
 function wireB(){
-  wireClipTools();wireFreeRoll();wireLauncher();wireShare();
+  wireClipTools();wireFreeRoll();wireLauncher();wireShare();wireMedia();
 }
 function hooksB(){
-  return{analyzeAsset,analysisCache,autoDetectClip,clipById,get selectedClip(){return selectedClip},set selectedClip(v){selectedClip=v},renderClipTools,sliceClipAtTransients,LOOPS,addLoopToProject,renderLoopDef,flacEncode,shareOrDownload,buildProjectLink,loadProjectLink,decodeProjectLink,playerHtml,b64std,exportPlayerFile,copyProjectLink,loadFromHash,L,lnLaunch,lnScene,lnSetOn,lnSetRec,lnCommit,renderLauncher,lnApplyQueue,FR,frAdd,frList,frDraw,frSetTrack,frKey,
+  return{analyzeAsset,analysisCache,autoDetectClip,clipById,get selectedClip(){return selectedClip},set selectedClip(v){selectedClip=v},renderClipTools,sliceClipAtTransients,LOOPS,addLoopToProject,renderLoopDef,VID,toggleVideo,stopVideo,lyricsToLrc,parseLrc,renderLyrics,lyricAt,vocalTrim,vocalNormalize,vocalToggleChain,startVocalTake,MO,midiOutNote,midiOutClock,midiOutStop,midiOutConnect,midiOutPick,MIC,clipPeakInfo,flacEncode,shareOrDownload,buildProjectLink,loadProjectLink,decodeProjectLink,playerHtml,b64std,exportPlayerFile,copyProjectLink,loadFromHash,L,lnLaunch,lnScene,lnSetOn,lnSetRec,lnCommit,renderLauncher,lnApplyQueue,FR,frAdd,frList,frDraw,frSetTrack,frKey,
     clipStretchRate,reversedBuf,serialize,autoVal,lfoVal,autoTarget,syncAutoParams,remapAuto,audioBufferToWav,registerAudio,addAudioClip,refitClipLen,srcBarSec,stretchNeeded,PREF};
 }
 /* ====================================================================
@@ -4292,7 +4499,7 @@ const askText=(title,msg,value,ok)=>askDialog({title,msg,input:true,value,ok:ok|
 
 /* ---------- recording preferences ---------- */
 const LS_PREF='musicApp.prefs';
-function loadPrefs(){try{const o=JSON.parse(lsGet(LS_PREF)||'{}');if([0,1,2].includes(o.countIn))PREF.countIn=o.countIn;if(typeof o.metroRec==='boolean')PREF.metroRec=o.metroRec;if(Number.isFinite(o.latMs))PREF.latMs=clamp(Math.round(o.latMs),0,500);if(typeof o.micPlay==='boolean')PREF.micPlay=o.micPlay}catch(e){}}
+function loadPrefs(){try{const o=JSON.parse(lsGet(LS_PREF)||'{}');if(typeof o.monitor==='boolean')PREF.monitor=o.monitor;if(typeof o.midiOut==='string')PREF.midiOut=o.midiOut.slice(0,200);if(typeof o.moNotes==='boolean')PREF.moNotes=o.moNotes;if(typeof o.moClock==='boolean')PREF.moClock=o.moClock;if(Number.isFinite(o.moLat))PREF.moLat=clamp(Math.round(o.moLat),-200,500);if([0,1,2].includes(o.countIn))PREF.countIn=o.countIn;if(typeof o.metroRec==='boolean')PREF.metroRec=o.metroRec;if(Number.isFinite(o.latMs))PREF.latMs=clamp(Math.round(o.latMs),0,500);if(typeof o.micPlay==='boolean')PREF.micPlay=o.micPlay}catch(e){}}
 const savePrefs=()=>lsSet(LS_PREF,JSON.stringify(PREF));
 function openRecDlg(){$('#recCount').value=PREF.countIn;$('#recMetro').checked=PREF.metroRec;$('#recLat').value=PREF.latMs;$('#recPlay').checked=PREF.micPlay;$('#recDlg').showModal()}
 
@@ -4301,6 +4508,7 @@ const MIC={rec:null,stream:null,chunks:[],at:0,offset:0,byUs:false,busy:false};
 function micUI(on){const b=$('#micRecord');if(!b)return;b.classList.toggle('rec-on',on);b.textContent=on?'■ Stop recording':'● Record mic';b.setAttribute('aria-pressed',on)}
 /* every exit path goes through here, so the microphone is always released */
 function micCleanup(){
+  try{if(MIC.mon)MIC.mon.disconnect();if(MIC.monG)MIC.monG.disconnect()}catch(e){}MIC.mon=MIC.monG=null;MIC.vocal=false;
   const s=MIC.stream;MIC.stream=null;if(s)s.getTracks().forEach(t=>{try{t.stop()}catch(e){}});
   MIC.rec=null;micUI(false);
 }
@@ -4313,13 +4521,14 @@ async function toggleMic(){
   try{
     stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
     MIC.stream=stream;
+    if(PREF.monitor){const E0=ensureAudio();if(E0){MIC.mon=E0.ctx.createMediaStreamSource(stream);MIC.monG=E0.ctx.createGain();MIC.monG.gain.value=.8;MIC.mon.connect(MIC.monG);MIC.monG.connect(E0.ctx.destination)}} /* monitoring is opt-in (feedback risk) */
     const rec=new MediaRecorder(stream);MIC.rec=rec;MIC.chunks=[];MIC.byUs=false;MIC.offset=PREF.latMs/1000;MIC.at=Math.floor(playBars()*4)/4;
     rec.ondataavailable=e=>{if(e.data&&e.data.size)MIC.chunks.push(e.data)};
     rec.onerror=()=>{toast('Recording error — the microphone was released');micCleanup()};
     rec.onstop=onMicStop;
     stream.getAudioTracks().forEach(t=>t.addEventListener('ended',()=>{if(MIC.rec&&MIC.rec.state==='recording')MIC.rec.stop()}));
-    if(PREF.micPlay&&S.mode==='song'&&!T.playing&&!T.preparing){ /* play the song (with count-in / metronome) while recording */
-      MIC.at=Math.floor(T.pos/SPB*4)/4;MIC.byUs=true;play({count:PREF.countIn});
+    if((PREF.micPlay||MIC.vocal)&&S.mode==='song'&&!T.playing&&!T.preparing){ /* play the song (with count-in / metronome) while recording */
+      MIC.at=Math.floor(T.pos/SPB*4)/4;MIC.byUs=true;play({count:MIC.vocal?Math.max(PREF.countIn,1):PREF.countIn});
       await waitFor(()=>T.playing,30000);if(!T.playing)throw new Error('playback did not start');
     }
     const E=live,startCtx=E?E.ctx.currentTime:0;rec.start();
@@ -4333,10 +4542,10 @@ async function toggleMic(){
   }finally{MIC.busy=false}
 }
 async function onMicStop(){
-  const rec=MIC.rec,chunks=MIC.chunks,at=MIC.at,offset=MIC.offset,byUs=MIC.byUs,type=(rec&&rec.mimeType)||'audio/webm';
+  const rec=MIC.rec,chunks=MIC.chunks,at=MIC.at,offset=MIC.offset,byUs=MIC.byUs,voc=MIC.vocal,vti=MIC.ti,type=(rec&&rec.mimeType)||'audio/webm';
   micCleanup();MIC.chunks=[];if(byUs&&T.playing)pause();
   const blob=new Blob(chunks,{type});if(!blob.size){toast('Nothing recorded');return}
-  const id=await registerAudio(blob,'Mic take');if(id)addAudioClip(id,'Mic take',at,{offset});
+  const id=await registerAudio(blob,voc?'Vocal take':'Mic take');if(id){const c=addAudioClip(id,voc?'Vocal take':'Mic take',at,{offset,ti:voc&&S.tracks[vti]?vti:undefined});if(c&&voc){c.fadeIn=.01;c.fadeOut=.03;renderClipTools();vocalUI()}}
 }
 
 /* ---------- sampler ---------- */
