@@ -960,6 +960,20 @@ await test('[B] MIDI output: notes (drums on ch 10) + clock + start/stop reach a
   noErr(o);await close(o);return `${r.total} messages: ${r.clock} clock pulses, start/stop, notes with matching offs`;
 });
 
+await test('[UI] "Projects" replaces the DAW "Import audio" button (import stays in Projects + drag-and-drop); "Connect MIDI" is gone and MIDI is enabled from the device menu',async()=>{
+  const o=await open();const pg=o.page;
+  const r=await pg.evaluate(()=>({imp:!!document.getElementById('importAudio'),conn:!!document.getElementById('midiConnect'),txt:[...document.querySelectorAll('button')].map(b=>b.textContent.trim()),proj:document.getElementById('dawProjects')&&document.getElementById('dawProjects').textContent,sel:!document.getElementById('midiIn').disabled}));
+  assert(!r.imp,'Import audio button removed');assert(!r.conn,'Connect MIDI button removed');assert(!r.txt.includes('Import audio')&&!r.txt.includes('Connect MIDI'),'no such labels');eq(r.proj,'Projects');assert(r.sel,'MIDI device menu usable');
+  await pg.click('#dawProjects');await pg.waitForSelector('#libDlg[open]');assert(await pg.isVisible('#libImportAudio'),'import audio lives in the Projects dialog');
+  const [fc]=await Promise.all([pg.waitForEvent('filechooser'),pg.click('#libImportAudio')]);assert(fc.isMultiple()===false,'file chooser opens');
+  await pg.evaluate(()=>{const d=document.getElementById('libDlg');if(d.open)d.close()});
+  /* first interaction with the MIDI menu asks for access (mocked) */
+  const m=await pg.evaluate(async()=>{let asked=0;navigator.requestMIDIAccess=async()=>{asked++;return{inputs:new Map([['i1',{id:'i1',name:'Mock keys',state:'connected'}]]),outputs:new Map(),onstatechange:null}};
+    const MI=__beat.MIDI;MI.supported=true;MI.access=null;const sel=document.getElementById('midiIn');sel.dispatchEvent(new Event('pointerdown'));await new Promise(r=>setTimeout(r,200));
+    return{asked,opts:[...sel.options].map(x=>x.text)}});
+  eq(m.asked,1);assert(m.opts.includes('Mock keys'),'device listed after enabling: '+m.opts);noErr(o);await close(o);return 'Import audio → Projects (import inside dialog); Connect MIDI removed, menu requests access';
+});
+
 /* ===================================================================== */
 await browser.close();if(srv)srv.s.close();
 const failed=results.filter(r=>!r.ok);

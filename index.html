@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-HY3vibBR1bpDcAepc9mz31dNmkYFVm6Xpe+w75m9w3I='; style-src 'unsafe-inline'; img-src 'self' data: blob:; font-src data:; media-src 'self' blob: data:; connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ouT/Go8BXs/yigsKSXQpaK/OXIT5E+/pxITnucWbCrY='; style-src 'unsafe-inline'; img-src 'self' data: blob:; font-src data:; media-src 'self' blob: data:; connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="description" content="Music Making App — a free browser step sequencer, piano roll, DAW timeline and synth with MP3/WAV/MIDI export. No install, works offline.">
 <link rel="canonical" href="https://swellyis.github.io/music-app/">
 <meta property="og:type" content="website">
@@ -524,7 +524,7 @@ dialog::backdrop{background:rgba(8,12,14,.55);backdrop-filter:blur(2px)}
       <section class="library"><div class="section-head"><div><h2>Sound library</h2><p>Click a sound to audition it and assign it to that track.</p></div></div><div class="library-grid" id="soundLibrary"></div></section>
       <div class="lower">
         <section class="piano"><div class="section-head"><h2>Playable keys</h2><span id="keysHint">A · S · D · F · G · H · J · K</span></div><div class="keys" id="keys" role="group" aria-label="Playable synthesizer keyboard"></div>
-          <div class="piano-tools"><label class="sr-only" for="keysVoice">Keys sound</label><select id="keysVoice"><option value="8">Lead sound</option><option value="6">Bass sound</option><option value="7">Chord sound</option><option value="9">Lead 2 sound</option><option value="10">Keys 2 sound</option><option value="11">Pad sound</option><optgroup label="Drums"><option value="0">Kick</option><option value="1">Snare</option><option value="2">Clap</option><option value="3">Closed hat</option><option value="4">Open hat</option><option value="5">Perc</option></optgroup></select><button class="secondary-btn" id="keysOctDown" aria-label="Keys octave down">− Oct</button><button class="secondary-btn" id="keysOctUp" aria-label="Keys octave up">+ Oct</button><button class="secondary-btn" id="keysLayout" aria-pressed="false" title="Two-row chromatic computer-keyboard layout (letter shortcuts P T M L R are off while it is on)">Piano layout</button><button class="secondary-btn" id="keysChord" aria-pressed="false" title="Play diatonic chords">Chords</button></div><div class="midi-row"><button class="secondary-btn" id="midiConnect" aria-pressed="false">Connect MIDI</button><label class="sr-only" for="midiIn">MIDI input device</label><select id="midiIn" disabled><option value="all">All inputs</option></select><label class="sr-only" for="midiBend">Pitch bend range</label><select id="midiBend"><option value="1">Bend ±1 st</option><option value="2">Bend ±2 st</option><option value="5">Bend ±5 st</option><option value="12">Bend ±12 st</option></select><label class="sr-only" for="midiMod">Mod wheel destination</label><select id="midiMod"><option value="vib">Mod → vibrato</option><option value="filter">Mod → filter</option></select><span class="midi-dot" id="midiDot" aria-hidden="true"></span><span class="midi-wheel" id="midiWheel"></span><span class="midi-last" id="midiLast" aria-live="off"></span><p class="midi-status" id="midiStatus" role="status" aria-live="polite"></p></div></section>
+          <div class="piano-tools"><label class="sr-only" for="keysVoice">Keys sound</label><select id="keysVoice"><option value="8">Lead sound</option><option value="6">Bass sound</option><option value="7">Chord sound</option><option value="9">Lead 2 sound</option><option value="10">Keys 2 sound</option><option value="11">Pad sound</option><optgroup label="Drums"><option value="0">Kick</option><option value="1">Snare</option><option value="2">Clap</option><option value="3">Closed hat</option><option value="4">Open hat</option><option value="5">Perc</option></optgroup></select><button class="secondary-btn" id="keysOctDown" aria-label="Keys octave down">− Oct</button><button class="secondary-btn" id="keysOctUp" aria-label="Keys octave up">+ Oct</button><button class="secondary-btn" id="keysLayout" aria-pressed="false" title="Two-row chromatic computer-keyboard layout (letter shortcuts P T M L R are off while it is on)">Piano layout</button><button class="secondary-btn" id="keysChord" aria-pressed="false" title="Play diatonic chords">Chords</button></div><div class="midi-row"><label class="sr-only" for="midiIn">MIDI input device</label><select id="midiIn" title="MIDI keyboard input — open this menu to allow MIDI access the first time"><option value="all">MIDI input: open to enable…</option></select><label class="sr-only" for="midiBend">Pitch bend range</label><select id="midiBend"><option value="1">Bend ±1 st</option><option value="2">Bend ±2 st</option><option value="5">Bend ±5 st</option><option value="12">Bend ±12 st</option></select><label class="sr-only" for="midiMod">Mod wheel destination</label><select id="midiMod"><option value="vib">Mod → vibrato</option><option value="filter">Mod → filter</option></select><span class="midi-dot" id="midiDot" aria-hidden="true"></span><span class="midi-wheel" id="midiWheel"></span><span class="midi-last" id="midiLast" aria-live="off"></span><p class="midi-status" id="midiStatus" role="status" aria-live="polite"></p></div></section>
         <section class="brain"><div class="section-head"><h2>Idea engine</h2><span>Pattern tools</span></div>
           <div class="brain-grid"><button class="brain-btn accent" id="evolve"><strong>Evolve</strong><span>Variation, same groove</span></button><button class="brain-btn" id="fill"><strong>Fill</strong><span>Add end-of-bar energy</span></button><button class="brain-btn" id="humanizeBtn"><strong>Humanize</strong><span>Relax the velocity</span></button><button class="brain-btn" id="undo"><strong>Undo</strong><span>Restore last change</span></button></div>
           <h3>Generate in selected genre</h3>
@@ -562,7 +562,7 @@ dialog::backdrop{background:rgba(8,12,14,.55);backdrop-filter:blur(2px)}
 </div>
 <div class="app" style="padding-top:0;padding-bottom:0">
 <section class="daw-studio" id="dawStudio" aria-label="DAW timeline">
- <div class="daw-toolbar"><h2>DAW timeline</h2><button class="secondary-btn" id="addDawTrack">+ Audio track</button><button class="secondary-btn" id="importAudio">Import audio</button><input class="audio-bin" id="audioFile" type="file" accept="audio/*" hidden><button class="secondary-btn" id="toggleAutomation" aria-pressed="false">Automation</button><button class="secondary-btn" id="loopLib" title="Built-in loops made in your browser">Loop library</button><button class="secondary-btn" id="addClip" title="Add a pattern clip for the selected track at the playhead">+ Clip</button><button class="secondary-btn" id="splitClip" title="Split the selected clip at the playhead (or its middle)">Split</button><button class="secondary-btn" id="dupClip" title="Duplicate the selected clip (Ctrl/Cmd+D)">Duplicate</button><button class="secondary-btn" id="deleteClip">Delete clip</button>
+ <div class="daw-toolbar"><h2>DAW timeline</h2><button class="secondary-btn" id="addDawTrack">+ Audio track</button><button class="secondary-btn" id="dawProjects" title="Open, rename, duplicate or delete saved projects (audio import is inside, or drop audio files onto the page)">Projects</button><input class="audio-bin" id="audioFile" type="file" accept="audio/*" hidden><button class="secondary-btn" id="toggleAutomation" aria-pressed="false">Automation</button><button class="secondary-btn" id="loopLib" title="Built-in loops made in your browser">Loop library</button><button class="secondary-btn" id="addClip" title="Add a pattern clip for the selected track at the playhead">+ Clip</button><button class="secondary-btn" id="splitClip" title="Split the selected clip at the playhead (or its middle)">Split</button><button class="secondary-btn" id="dupClip" title="Duplicate the selected clip (Ctrl/Cmd+D)">Duplicate</button><button class="secondary-btn" id="deleteClip">Delete clip</button>
   <div class="patterns" role="group" aria-label="Pattern of selected clip" id="clipPats"><button class="pattern-btn" data-cp="0" aria-pressed="false" aria-label="Set clip to pattern A">A</button><button class="pattern-btn" data-cp="1" aria-pressed="false" aria-label="Set clip to pattern B">B</button><button class="pattern-btn" data-cp="2" aria-pressed="false" aria-label="Set clip to pattern C">C</button><button class="pattern-btn" data-cp="3" aria-pressed="false" aria-label="Set clip to pattern D">D</button><button class="pattern-btn" data-cp="4" aria-pressed="false" aria-label="Set clip to pattern E">E</button><button class="pattern-btn" data-cp="5" aria-pressed="false" aria-label="Set clip to pattern F">F</button><button class="pattern-btn" data-cp="6" aria-pressed="false" aria-label="Set clip to pattern G">G</button><button class="pattern-btn" data-cp="7" aria-pressed="false" aria-label="Set clip to pattern H">H</button></div>
   <select id="audioMode" aria-label="How audio clips follow the tempo"><option value="stretch">Audio: time-stretch</option><option value="speed">Audio: varispeed (pitch shifts)</option></select>
   <select id="snapGrid" aria-label="Snap grid"><option value="1">Snap 1 bar</option><option value="0.5">Snap 1/2</option><option value="0.25">Snap 1/4</option><option value="0">Snap off</option></select>
@@ -619,7 +619,7 @@ dialog::backdrop{background:rgba(8,12,14,.55);backdrop-filter:blur(2px)}
 <dialog id="midiOutDlg" aria-labelledby="moTitle"><div class="dlg-head"><h2 id="moTitle">MIDI output</h2><button class="secondary-btn" data-close>Close</button></div><div class="dlg-body"><p class="drop-hint" style="display:block">Send the notes you hear (drums on channel 10) and MIDI clock to a hardware synth or a virtual port. Nothing leaves your device.</p><label for="moSel">Output</label><select id="moSel"><option value="">— none —</option></select><label><input type="checkbox" id="moNotes" checked> Send notes</label><label><input type="checkbox" id="moClock" checked> Send clock + start/stop</label><label for="moLat">Latency offset (ms)</label><input type="number" id="moLat" min="-200" max="500" step="5" value="0"><p class="drop-hint" id="moInfo" style="display:block"></p></div></dialog>
 <dialog id="loopDlg" aria-labelledby="loopTitle"><div class="dlg-head"><h2 id="loopTitle">Loop library</h2><button class="secondary-btn" data-close>Close</button></div><div class="dlg-body"><p class="drop-hint" style="display:block">Loops are synthesised right here in your browser (nothing is downloaded). Each one lands on the timeline at the playhead and follows your project tempo.</p><div class="export-grid" id="loopList"></div></div></dialog>
 <dialog id="askDlg" aria-labelledby="askTitle"><form id="askForm"><div class="dlg-head"><h2 id="askTitle">Confirm</h2></div><div class="dlg-body"><p id="askMsg"></p><input id="askInput" type="text" maxlength="60" autocomplete="off" aria-label="Name" hidden><div class="dlg-actions"><button type="button" class="secondary-btn" id="askCancel">Cancel</button><button type="submit" class="secondary-btn accent" id="askOk">OK</button></div></div></form></dialog>
-<dialog id="libDlg" aria-labelledby="libTitle"><div class="dlg-head"><h2 id="libTitle">Projects</h2><button class="secondary-btn" data-close>Close</button></div><div class="dlg-body"><p class="hint" id="libNote">Projects saved in this browser, newest first. Audio is stored with them.</p><ul class="lib-list" id="libList"></ul><div class="dlg-actions"><button class="secondary-btn accent" id="libSaveNew">Save current as new project…</button></div></div></dialog>
+<dialog id="libDlg" aria-labelledby="libTitle"><div class="dlg-head"><h2 id="libTitle">Projects</h2><button class="secondary-btn" data-close>Close</button></div><div class="dlg-body"><p class="hint" id="libNote">Projects saved in this browser, newest first. Audio is stored with them.</p><ul class="lib-list" id="libList"></ul><div class="dlg-actions"><button class="secondary-btn accent" id="libSaveNew">Save current as new project…</button><button class="secondary-btn" id="libImportAudio" title="Add an audio file to the timeline (you can also drop audio onto the page)">Import audio file…</button></div></div></dialog>
 <dialog id="recDlg" aria-labelledby="recTitle"><div class="dlg-head"><h2 id="recTitle">Recording settings</h2><button class="secondary-btn" data-close>Close</button></div><div class="dlg-body rec-form">
   <label for="recCount">Count-in</label><select id="recCount"><option value="0">Off</option><option value="1">1 bar</option><option value="2">2 bars</option></select>
   <label for="recMetro">Metronome while recording</label><input type="checkbox" id="recMetro">
@@ -2529,7 +2529,7 @@ async function midiConnect(auto){
     if(!auto)toast(MIDI.inputs.length?'MIDI connected: '+MIDI.inputs.length+' device'+(MIDI.inputs.length>1?'s':''):'MIDI ready — plug in a keyboard');
   }catch(err){
     MIDI.access=null;const nm=err&&err.name,denied=nm==='SecurityError'||nm==='NotAllowedError'||/denied|permission|secure/i.test((err&&err.message)||'');
-    midiStatus(denied?'MIDI access was blocked. Allow “MIDI devices” in the browser’s site permissions, then press Connect again.':'Could not start MIDI ('+((err&&err.message)||err)+').','warn');
+    midiStatus(denied?'MIDI access was blocked. Allow “MIDI devices” in the browser’s site permissions, then open the MIDI input menu again.':'Could not start MIDI ('+((err&&err.message)||err)+').','warn');
     if(!auto)toast(denied?'MIDI access was blocked':'Could not start MIDI');
   }
 }
@@ -2537,12 +2537,11 @@ function refreshMidiInputs(changed){
   const a=MIDI.access;if(!a)return;const list=[];a.inputs.forEach(i=>{if(i.state!=='disconnected')list.push(i)});
   const had=new Set(MIDI.inputs.map(i=>i.id));MIDI.inputs=list;
   const sel=$('#midiIn');if(!sel)return;
-  sel.innerHTML='<option value="all">All inputs</option>'+list.map(i=>'<option value="'+esc(i.id)+'">'+esc(i.name||('MIDI input '+i.id))+'</option>').join('');
+  sel.innerHTML='<option value="all">'+(list.length?'All inputs':'No MIDI inputs found')+'</option>'+list.map(i=>'<option value="'+esc(i.id)+'">'+esc(i.name||('MIDI input '+i.id))+'</option>').join('');
   if(MIDI.sel!=='all'&&!list.some(i=>i.id===MIDI.sel))MIDI.sel='all';
-  sel.value=MIDI.sel;sel.disabled=!list.length;
+  sel.value=MIDI.sel;sel.disabled=false;
   list.forEach(i=>{i.onmidimessage=onMidiMessage});
-  $('#midiConnect').textContent=list.length?'MIDI connected':'Connect MIDI';
-  $('#midiConnect').setAttribute('aria-pressed',!!list.length);
+  sel.setAttribute('aria-pressed',!!list.length);
   if(list.length){midiStatus('Listening: '+(MIDI.sel==='all'?list.map(i=>i.name).join(', '):(list.find(i=>i.id===MIDI.sel)||{}).name)+'. Plays the sound chosen above at the exact pitch; velocity and sustain pedal work; channel 10 plays drums.','ok');
     if(changed){const nw=list.filter(i=>!had.has(i.id));if(nw.length)toast('MIDI device connected: '+nw[0].name)}}
   else midiStatus('No MIDI keyboard found. Plug one in and it will appear here automatically.','');
@@ -2578,14 +2577,16 @@ function midiNoteOff(n,ch){const id=ch+':'+n;if(!MIDI.active.has(id))return;if(M
 function midiFlushSustain(){MIDI.sustained.forEach(midiRelease);MIDI.sustained.clear()}
 function midiPanic(){MIDI.sustain=false;[...MIDI.active.keys()].forEach(midiRelease);MIDI.sustained.clear()}
 function initMidiUI(){
-  const btn=$('#midiConnect'),sel=$('#midiIn');if(!btn)return;
+  const sel=$('#midiIn');if(!sel)return;
   try{const pr=JSON.parse(lsGet('beatStudio.midiPrefs')||'{}');if([1,2,5,12].includes(pr.range))MIDI.bendRange=pr.range;if(pr.dest==='vib'||pr.dest==='filter')MIDI.modDest=pr.dest}catch(e){}
   const bs=$('#midiBend'),ms=$('#midiMod');bs.value=MIDI.bendRange;ms.value=MIDI.modDest;
   const savePr=()=>{MIDI.bendRange=+bs.value;MIDI.modDest=ms.value;lsSet('beatStudio.midiPrefs',JSON.stringify({range:MIDI.bendRange,dest:MIDI.modDest}));applyWheels()};bs.onchange=savePr;ms.onchange=savePr;applyWheels();
-  btn.onclick=()=>midiConnect(false);sel.onchange=()=>{MIDI.sel=sel.value;refreshMidiInputs()};
-  if(!MIDI.supported){btn.disabled=true;btn.title='Web MIDI is not available in this browser';midiStatus('Web MIDI isn’t supported in this browser. Try Chrome, Edge or Opera. The on-screen keys and A–K still work.','warn');return}
-  midiStatus('Optional: connect a MIDI keyboard to play the sound chosen above (velocity, sustain pedal, channel 10 drums). Press Record to write notes.','');
-  if(lsGet('beatStudio.midi')==='1'&&navigator.permissions&&navigator.permissions.query){
+  sel.onchange=()=>{MIDI.sel=sel.value;refreshMidiInputs()};
+  /* no Connect button: the first interaction with the device menu asks for MIDI access */
+  ['pointerdown','focus','keydown'].forEach(ev=>sel.addEventListener(ev,()=>{if(MIDI.supported&&!MIDI.access&&!MIDI.asking){MIDI.asking=true;midiConnect(false).finally(()=>{MIDI.asking=false})}}));
+  if(!MIDI.supported){sel.disabled=true;sel.title='Web MIDI is not available in this browser';midiStatus('Web MIDI isn’t supported in this browser. Try Chrome, Edge or Opera. The on-screen keys and A–K still work.','warn');return}
+  midiStatus('Optional: open the MIDI input menu to allow access, then play a MIDI keyboard to play the sound chosen above (velocity, sustain pedal, channel 10 drums). Press Record to write notes.','');
+  if(navigator.permissions&&navigator.permissions.query){ /* silently connect whenever the browser already granted MIDI access */
     navigator.permissions.query({name:'midi'}).then(r=>{if(r.state==='granted')midiConnect(true)}).catch(()=>{});
   }
 }
@@ -2717,7 +2718,7 @@ function dawPointerUp(){
 }
 function dawDbl(e){
   if(e.target.closest('.daw-clip'))return;const body=e.target.closest('.lane-body');if(!body)return;
-  const ti=+body.parentNode.dataset.track;if(S.tracks[ti].kind==='audio'){toast('Use “Import audio” or “Record mic” for audio tracks');return}
+  const ti=+body.parentNode.dataset.track;if(S.tracks[ti].kind==='audio'){toast('Drop an audio file onto the page, use Projects → Import audio file, or Record mic for audio tracks');return}
   const r=body.getBoundingClientRect(),start=clamp(Math.floor(((e.clientX-r.left)/D.bw)/(snapVal()||.25))*(snapVal()||.25),0,S.songBars-1);
   checkpoint();const c=newClip(S.cur,start,Math.min(1,S.songBars-start));S.tracks[ti].clips.push(c);selectedClip=c.id;markDirty();renderDAW();renderArr();
 }
@@ -3419,7 +3420,7 @@ const SHORTCUTS=[
   ['Tap tempo','T'],['Metronome','M'],['Loop on/off','L'],['Record armed on/off','R'],['Tempo −/+ 1 (Shift: 5)','[ ]'],
   ['Copy / paste / duplicate clip','Ctrl/Cmd + C / V / D'],['Delete selected clip','Delete'],['Save / Save as…','Ctrl/Cmd + S / Shift + S'],['Move a timeline clip (focus it first)','← → one bar · ↑ ↓ other track'],['Resize a timeline clip','Shift + ← → (Alt + Shift + ← → trims the start)'],['Piano roll: move / toggle / length','Arrow keys · Enter or Space · Shift + ← →'],['Step: toggle','Enter / Space on a step'],
   ['Step: move focus','Arrow keys · Home / End · one Tab stop per grid'],['Step: velocity','Shift + ↑ / ↓'],['Step: probability, ratchet, length','Right-click, long-press, or Menu key'],
-  ['MIDI keyboard','Connect MIDI under Playable keys · velocity, sustain pedal, pitch bend, mod wheel, ch. 10 = drums'],['Knobs','Drag, scroll, arrows · double-click resets'],['Free-pitch piano roll (canvas)','Arrows move · Enter adds/removes · Shift+←→ length · Shift+↑↓ velocity · Alt+arrows move note · PgUp/PgDn octave · Delete'],['Show this help','?']
+  ['MIDI keyboard','Open the MIDI input menu under Playable keys · velocity, sustain pedal, pitch bend, mod wheel, ch. 10 = drums'],['Knobs','Drag, scroll, arrows · double-click resets'],['Free-pitch piano roll (canvas)','Arrows move · Enter adds/removes · Shift+←→ length · Shift+↑↓ velocity · Alt+arrows move note · PgUp/PgDn octave · Delete'],['Show this help','?']
 ];
 function isTyping(t){return t&&(t.isContentEditable||t.tagName==='TEXTAREA'||t.tagName==='SELECT'||(t.tagName==='INPUT'&&!['range','checkbox','button','file'].includes(t.type)))}
 function onKeyDown(e){
@@ -3586,7 +3587,7 @@ function wire(){
   dg.addEventListener('keydown',clipKey);
   $('#zoom').oninput=()=>{renderDAW()};
   $('#addDawTrack').onclick=()=>{checkpoint();const n=S.tracks.filter((t,i)=>i>=NT).length+1;S.tracks.push(audioTrack(n));if(live)ensureStrips(live);markDirty();renderDAW();toast('Audio track added — import audio or record the mic')};
-  $('#importAudio').onclick=()=>$('#audioFile').click();$('#audioFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';await importAudioFile(f)};
+  $('#dawProjects').onclick=openLibrary;$('#libImportAudio').onclick=()=>{$('#libDlg').close();$('#audioFile').click()};$('#audioFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';await importAudioFile(f)};
   $('#toggleAutomation').onclick=()=>{const p=$('#automationPanel'),o=p.classList.toggle('open');$('#toggleAutomation').setAttribute('aria-pressed',o);if(o)renderAutomationPoints()};
   $('#automationTrack').onchange=()=>{$('#automationParam')._sig=null;renderAutomationPoints()};$('#automationParam').onchange=renderAutomationPoints;['#autoShape','#autoLfoShape'].forEach(s=>$(s).onchange=autoCfgEdit);['#autoLfoRate','#autoLfoDepth'].forEach(s=>$(s).oninput=autoCfgEdit);$('#automationPoints').addEventListener('input',autoInput);
   $('#clearAutomation').onclick=()=>{const k=autoKey();if(S.auto[k]){checkpoint();delete S.auto[k];if(S.autoCfg)delete S.autoCfg[k];if(live){applyAllStrips(true);applyMaster(live,true)}renderAutomationPoints();markDirty()}};
@@ -4471,7 +4472,7 @@ function wireB(){
 }
 function hooksB(){
   return{analyzeAsset,analysisCache,autoDetectClip,clipById,get selectedClip(){return selectedClip},set selectedClip(v){selectedClip=v},renderClipTools,sliceClipAtTransients,LOOPS,addLoopToProject,renderLoopDef,VID,toggleVideo,stopVideo,lyricsToLrc,parseLrc,renderLyrics,lyricAt,vocalTrim,vocalNormalize,vocalToggleChain,startVocalTake,MO,midiOutNote,midiOutClock,midiOutStop,midiOutConnect,midiOutPick,MIC,clipPeakInfo,flacEncode,shareOrDownload,buildProjectLink,loadProjectLink,decodeProjectLink,playerHtml,b64std,exportPlayerFile,copyProjectLink,loadFromHash,L,lnLaunch,lnScene,lnSetOn,lnSetRec,lnCommit,renderLauncher,lnApplyQueue,FR,frAdd,frList,frDraw,frSetTrack,frKey,
-    clipStretchRate,reversedBuf,serialize,autoVal,lfoVal,autoTarget,syncAutoParams,remapAuto,audioBufferToWav,registerAudio,addAudioClip,refitClipLen,srcBarSec,stretchNeeded,PREF};
+    MIDI,clipStretchRate,reversedBuf,serialize,autoVal,lfoVal,autoTarget,syncAutoParams,remapAuto,audioBufferToWav,registerAudio,addAudioClip,refitClipLen,srcBarSec,stretchNeeded,PREF};
 }
 /* ====================================================================
    9. FEATURES — dialogs, accessibility helpers, recording tools, mic, sampler, export (MP3 / stems / 24-bit),
