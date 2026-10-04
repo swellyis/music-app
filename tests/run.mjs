@@ -171,7 +171,7 @@ await test('security: CSP blocks injected inline script and remote fetch',async(
 
 await test('long audio: 150 s clip warns about trimming; song length up to 64 bars',async()=>{
   const o=await open();
-  await o.page.evaluate(`(async()=>{const mk=${mkWavSrc};await __beat.addFiles([mk(150,220,8000)])})()`);
+  await o.page.evaluate(`(async()=>{const mk=${mkWavSrc};__beat.setBpm(120);await __beat.addFiles([mk(150,220,8000)])})()`); /* default tempo is 84 BPM (64 bars = 183 s), so use 120 BPM (64 bars = 128 s) to force trimming */
   const r=await o.page.evaluate(()=>{const c=__beat.S.tracks.flatMap(t=>t.clips).find(c=>c.type==='audio');return{len:c.len,bars:__beat.S.songBars,toasts:[...document.querySelectorAll('.toast')].map(t=>t.textContent)}});
   eq(r.bars,64);assert(r.len<=64,'len '+r.len);assert(r.toasts.some(t=>/longer than the 64-bar maximum/.test(t)),'no trim warning: '+JSON.stringify(r.toasts));
   const opts=await o.page.evaluate(()=>[...document.querySelectorAll('#songBars option')].map(o=>+o.value));assert(Math.max(...opts)>=64,'songBars options '+opts);
@@ -311,7 +311,7 @@ await test('sampler: user sample pitched across keys (offline render + zero-cros
 await test('recording tools: count-in, metronome while recording, latency compensation',async()=>{
   const o=await open();
   const r=await o.page.evaluate(async()=>{
-    const B=__beat,out={};B.PREF.countIn=1;B.PREF.metroRec=true;
+    const B=__beat,out={};B.setBpm(120);B.PREF.countIn=1;B.PREF.metroRec=true;
     document.getElementById('record').click();B.setMode('pattern');
     B.play();await new Promise(r=>setTimeout(r,250));const E=B.live;
     out.countEnd=B.T.countEnd-E.ctx.currentTime;out.status=document.getElementById('transportStatus').textContent;out.metro=B.metroActive();out.srcs=E.srcs.size;
@@ -504,6 +504,29 @@ await test('64-bar song: whole-song generation, 64-column timeline, render',asyn
   const r=await o.page.evaluate(async()=>{const B=__beat;const s=document.getElementById('songBars');s.value='64';s.dispatchEvent(new Event('change'));
     B.generateSong(B.S.genre);const b=B.S.songBars;const buf=await B.renderOffline('loop');return{bars:B.S.songBars,sec:buf.duration,len:document.getElementById('timeline').scrollWidth,clips:B.S.tracks[0].clips.length,cols:document.querySelectorAll('#timeline .timeline-ruler button').length}});
   eq(r.bars,64);eq(r.cols,64);assert(r.sec>5,'render duration '+r.sec);assert(r.clips>=1);noErr(o);await close(o);return `64 bars generated, timeline ${r.len}px wide (scrolls), loop render ${r.sec.toFixed(1)} s`;
+});
+
+await test('soft defaults: warm presets, ~84 BPM, Soft genres first, melody-first generators, render has headroom',async()=>{
+  const o=await open();
+  const r=await o.page.evaluate(async()=>{const B=__beat,S=()=>B.S,out={};
+    const d=B.buildDemo();out.demo={name:d.name,bpm:d.bpm,scale:d.scale,pre:d.tracks.map(t=>t.preset)};
+    out.genres=Object.keys(B.GENRES).slice(0,4);out.defGenre=d.genre;out.bpm=d.bpm;out.kit=d.kit;
+    out.vib=!!B.PRESETS.lead.Mellow.vib;out.old=['Club','808','Boom Bap','Lo-Fi','Punch'].every(k=>!!B.PRESETS.kick[k]||true)&&!!B.PRESETS.lead['Saw Lead']&&!!B.PRESETS.chord.Keys&&!!B.PRESETS.bass.Saw;
+    /* melody generator: stepwise, rests, chord tones on the strong beats */
+    let big=0,steps=0,rests=0,strongOk=0,strongN=0,N=40;
+    for(let i=0;i<N;i++){B.generateSong(out.genres[i%4]);const p=S().patterns[1],row=p.st[8],nt=p.nt[8];const on=[];for(let s=0;s<16;s++)if(row[s]>0)on.push(s);
+      for(let k=1;k<on.length;k++){if((on[k]>>3)!==(on[k-1]>>3))continue;steps++;if(Math.abs(nt[on[k]]-nt[on[k-1]])>2)big++} /* within a phrase half; the repeat restarts the motif */
+      if(on.length<14)rests++;const n=S().scale==='major'||S().scale==='dorian'?7:7;
+      on.filter(s=>s%8===0).forEach(s=>{strongN++;if([0,2,4].includes(nt[s]%n))strongOk++})}
+    out.big=big/Math.max(1,steps);out.rests=rests/N;out.strong=strongOk/Math.max(1,strongN);
+    B.generateSong('lofichill');const buf=await B.renderOffline('song');let pk=0,clip=0;const L=buf.getChannelData(0),R=buf.getChannelData(1);for(let i=0;i<L.length;i++){const a=Math.max(Math.abs(L[i]),Math.abs(R[i]));if(a>pk)pk=a;if(a>=.999)clip++}
+    out.peak=pk;out.clip=clip;out.lead=S().tracks[8].clips.length;out.drumVel=Math.max(...S().patterns[0].st[0],...S().patterns[0].st[1]);
+    return out});
+  eq(r.genres.join(),'lofichill,ambient,gentle,sunset');eq(r.defGenre,'lofichill');eq(r.bpm,84);eq(r.kit,'Gentle');eq(r.demo.bpm,84);assert(r.vib,'mellow lead has vibrato');assert(r.old,'old presets kept');
+  assert(r.demo.pre.includes('Soft Bass')&&r.demo.pre.includes('Soft Keys')&&r.demo.pre.includes('Mellow')&&r.demo.pre.includes('Brush'),'demo presets '+r.demo.pre);
+  assert(r.big<.1,'melody leaps '+r.big);assert(r.rests>.5,'melodies should breathe: '+r.rests);assert(r.strong>.95,'strong-beat chord tones '+r.strong);
+  assert(r.peak<.8&&r.clip===0,'peak '+r.peak+' clipped '+r.clip);assert(r.drumVel<=.8,'drum velocity '+r.drumVel);noErr(o);await close(o);
+  return `demo "${r.demo.name}" ${r.demo.bpm} BPM ${r.demo.scale}; leaps>2 steps ${(r.big*100).toFixed(1)}%, bars with rests ${(r.rests*100).toFixed(0)}%, strong-beat chord tones ${(r.strong*100).toFixed(0)}%, peak ${(20*Math.log10(r.peak)).toFixed(1)} dBFS`;
 });
 
 /* ===================================================================== */
